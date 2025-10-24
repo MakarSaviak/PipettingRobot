@@ -1,6 +1,5 @@
 import numpy as np
-from pydantic import BaseModel, Field, computed_field, PositiveFloat
-from typing import List, Optional
+from pydantic import BaseModel, computed_field, PositiveFloat
 
 
 class Syringe(BaseModel):

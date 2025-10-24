@@ -4,3 +4,4 @@ from typing import List, Optional
 class Syringe(BaseModel):
     nominal_volume: float
     name: str
+    inner_diameter: float

@@ -22,12 +22,3 @@ class SyringeSolvent(BaseModel):
             # Use syringe-provided theoretical factor as a starting point
             self.real_correlation_factor = self.syringe_type.theoretical_correlation_factor()
         return self
-
-    def mm_for_volume(self, volume_uL: float) -> float:
-        """Convert a requested volume (µL) to plunger travel (mm)."""
-        return volume_uL * float(self.real_correlation_factor) + self.backlash_correction
-
-    def steps_for_volume(self, volume_uL: float, steps_per_mm: float, include_backlash: bool = True) -> int:
-        """Convert a requested volume (µL) to stepper steps given steps/mm for the plunger axis."""
-        mm = self.mm_for_volume(volume_uL, include_backlash=include_backlash)
-        return int(round(mm * steps_per_mm))

@@ -33,4 +33,3 @@ class SyringeSolvent(BaseModel):
         """Apply a custom function `fn` to convert plunger shift [mm] to displaced volume [µL]."""
         effective_mm = max(0.0, plunger_shift_mm - self.backlash_correction)
         return fn(effective_mm)
-

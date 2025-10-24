@@ -20,5 +20,5 @@ class SyringeSolvent(BaseModel):
     def _init_real_factor(self):
         if self.real_correlation_factor is None:
             # Use syringe-provided theoretical factor as a starting point
-            self.real_correlation_factor = self.syringe_type.theoretical_correlation_factor()
+            self.real_correlation_factor = self.syringe_type.theoretical_correlation_factor
         return self

@@ -13,8 +13,9 @@ class Syringe(BaseModel):
 
 
 if __name__ == "__main__":
-    syringe_solvent = Syringe(
+    syringe1000 = Syringe(
         nominal_volume=100,
         name = "Hamilton1001",
-        inner_diameter=9.2
+        inner_diameter=4.61
     )
+    print(syringe1000.theoretical_correlation_factor())

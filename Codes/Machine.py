@@ -23,6 +23,8 @@ class Machine(BaseModel):
 
     @model_validator(mode="after")
     def _bounds_and_consistency_checks(self):
+        if self.Z_min > self.Z_max:
+            raise ValueError("Z_min must be < Z_max")
         if self.z_min_limit >= self.z_max_limit:
             raise ValueError("z_min_limit must be < z_max_limit")
         if not (self.z_min_limit <= self.Z_min <= self.Z_max <= self.z_max_limit):

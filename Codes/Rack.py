@@ -1,5 +1,4 @@
-from pydantic import BaseModel, Field, PositiveFloat, model_validator, PositiveInt
-from typing import Optional, Callable
+from pydantic import BaseModel, PositiveFloat, PositiveInt
 
 
 class Rack(BaseModel):

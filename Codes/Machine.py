@@ -1,14 +1,14 @@
 from pydantic import BaseModel, Field, PositiveFloat, model_validator, PositiveInt, ConfigDict
 from typing import Optional, Callable
 
-#TODO change all the god damn z_min and z_max to the proper values
+#TODO change all the god damn z_min and z_max to the proper values IN THE LIQUID HANDLING CODE
 class Machine(BaseModel):
     # Per-instance hard limits
     z_min_limit: float = Field(..., description="Lowest allowed Z (mm) for this machine instance")
     z_max_limit: float = Field(..., description="Highest allowed Z (mm) for this machine instance")
 
-    Z_min: float # for some reason it is calculated as a distance from the vial, 75 -> 35
-    Z_max: float # 35 -> 75
+    Z_min: float # 35
+    Z_max: float # 75
     Z_slow: float # 45
     Fz: PositiveInt
     Fxy: PositiveInt

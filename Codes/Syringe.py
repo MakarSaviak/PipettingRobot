@@ -1,11 +1,12 @@
 import numpy as np
-from pydantic import BaseModel, computed_field, PositiveFloat
+from pydantic import BaseModel, computed_field, PositiveFloat, PositiveInt
 
 
 class Syringe(BaseModel):
     nominal_volume: PositiveFloat
     name: str
     inner_diameter: PositiveFloat  # in [mm]
+    id: PositiveInt
 
     # Make the theoretical correlation factor available on every instance.
     # Units: [mm/µL] = 1 / (π * (ID/2)^2)

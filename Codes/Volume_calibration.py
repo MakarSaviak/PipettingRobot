@@ -34,8 +34,8 @@ vials_per_row = config.getint('Rack', 'vials_per_row')
 columns = config.getint('Rack', 'columns')
 # Machine Settings
 Z_slow = config.getint('Machine', 'Z_slow')
-Z_min = config.getint('Machine', 'Z_min')
 Z_max = config.getint('Machine', 'Z_max')
+Z_min = config.getint('Machine', 'Z_min')
 Fz = config.getint('Machine', 'Fz')
 Fxy = config.getint('Machine', 'Fxy')
 Fa_push = config.getint('Machine', 'Fa_push')
@@ -60,40 +60,40 @@ def flush(volume, repeats=1):
     for _ in range(repeats):
         remove_from_vial(solvent1_x, solvent1_y, volume)
         g.absolute()
-        g.move(z=Z_min, F=Fz)
-        g.move(vial_waste[0], vial_waste[1], F=Fxy)
         g.move(z=Z_max, F=Fz)
-        g.move(A=0, F=Fa_push)
+        g.move(vial_waste[0], vial_waste[1], F=Fxy)
         g.move(z=Z_min, F=Fz)
+        g.move(A=0, F=Fa_push)
+        g.move(z=Z_max, F=Fz)
 #Function to peform the fill vial operation
 def fill_vial(x, y, non_contact):
     g.write("fill_vial")
     g.absolute()
-    g.move(z=Z_min, F=Fz)
+    g.move(z=Z_max, F=Fz)
     g.move(x, y, F=Fxy)
     if non_contact:
         g.move(z=Z_slow, F=Fz)
     else:
-        g.move(z=Z_max, F=Fz)
+        g.move(z=Z_min, F=Fz)
     g.move(A=0, F=Fa_push)
     g.absolute()
-    g.move(z=Z_min, F=Fz)
+    g.move(z=Z_max, F=Fz)
 #Function to perform the remove from vial operation
 def remove_from_vial(x, y, volume):
     g.write("remove_from_vial")
     g.absolute()
-    g.move(z=Z_min, F=Fz) # remove from vial
+    g.move(z=Z_max, F=Fz) # remove from vial
     g.move(x, y, F=Fxy)
-    g.move(z=Z_max, F=Fz) # move into the vial
+    g.move(z=Z_min, F=Fz) # move into the vial
     g.move(A=syringe(volume), F=Fa_pull)
-    g.move(z=Z_min, F=Fz)
+    g.move(z=Z_max, F=Fz)
 #Function to put the machine in the rest state
 def home():
     g.absolute()
-    g.move(z=Z_min, F=Fz)
+    g.move(z=Z_max, F=Fz)
     g.move(Rest_x, Rest_y, F=Fxy)
     g.move(A=0, F=Fa_pull)
-    g.move(z=Z_max, F=Fz)
+    g.move(z=Z_min, F=Fz)
     g.write('M84') 
 
 #Function to generate the G-code file

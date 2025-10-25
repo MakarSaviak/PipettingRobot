@@ -8,6 +8,7 @@ from typing import Optional, Callable
 class SyringeSolvent(BaseModel):
     syringe_type: Syringe
     solvent_type: Solvent
+    calibrated: bool = Field(False, description="Has this pair been empirically calibrated?")
     # Calibration parameters (per syringe–solvent pairing)
     # Backlash compensation in mm.
     backlash_correction: PositiveFloat = Field(0.0,

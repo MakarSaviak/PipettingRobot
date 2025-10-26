@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, PositiveFloat, model_validator, ConfigDict
 from typing import Optional, Callable, List
-from SyringeSolvent import SyringeSolvent
+from SyringeSolventLink import SyringeSolvent
 from Syringe import Syringe
 from Solvent import Solvent
 

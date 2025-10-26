@@ -18,8 +18,8 @@ class SyringeSolventLink(SQLModel, table=True):
     real_correlation_factor: Optional[float] = Field(default=None)
     since: Optional[date] = None
 
-    syringe: 'Syringe' = Relationship(back_populates="solvent_links")
-    solvent: 'Solvent' = Relationship(back_populates="syringe_links")
+    syringe: Syringe = Relationship(back_populates="solvent_links")
+    solvent: Solvent = Relationship(back_populates="syringe_links")
 
     @classmethod
     def __declare_last__(cls):

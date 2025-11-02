@@ -5,226 +5,224 @@ import sys
 import configparser
 import numpy as np
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QMessageBox, QInputDialog
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QFormLayout, QHBoxLayout,
+    QLabel, QComboBox, QDoubleSpinBox, QCheckBox, QPushButton,
+    QFileDialog, QMessageBox
 )
 
 from mecode import G
 
-# --- globals filled in main() to mimic original module-level variables ---
-config: configparser.ConfigParser
-available_syringes: list[str]
-syringe_name: str
-factor: float
-backlash: float
-syringe_vol: int
 
-vial1_s: list[float]
-dx_s: int
-dy_s: int
-solvent1_x: float
-solvent1_y: float
-vial_waste: list[float]
-vials_per_row: int
-columns: int
+class FastCalibrationWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Fast Syringe Calibration (PySide6)")
+        self.resize(560, 360)
 
-Z_slow: int
-Z_max: int
-Z_min: int
-Fz: int
-Fxy: int
-Fa_push: int
-Fa_push_slow: int
-Fa_pull: int
-Rest_x: int
-Rest_y: int
+        # ---- Load config.ini ----
+        self.config = configparser.ConfigParser()
+        if not self.config.read("config.ini"):
+            self._fatal("No config.ini found in the working directory.")
 
-g = G()  # will be replaced with G(outfile=...) when generating
+        self.available_syringes = [s for s in self.config.sections() if "syringe" in s.lower()]
+        if not self.available_syringes:
+            self._fatal("No sections containing 'syringe' found in config.ini.")
 
+        # Rack settings (use same types as the original fast script)
+        try:
+            self.vial1_s = [self.config.getfloat("Rack", "vial1_x"),
+                            self.config.getfloat("Rack", "vial1_y")]
+            self.dx_s = self.config.getint("Rack", "dx_s")
+            self.dy_s = self.config.getint("Rack", "dy_s")
+            self.solvent1_x = self.config.getfloat("Rack", "solvent1_x")
+            self.solvent1_y = self.config.getfloat("Rack", "solvent1_y")
+            self.vial_waste = [self.config.getfloat("Rack", "waste_x"),
+                               self.config.getfloat("Rack", "waste_y")]
+            self.vials_per_row = self.config.getint("Rack", "vials_per_row")
+            self.columns = self.config.getint("Rack", "columns")
+        except Exception as e:
+            self._fatal(f"Rack settings missing/invalid:\n{e!s}")
 
-# --- helpers & motions (same formulas/logic as your script) ---
-def syringe(volume_uL: float) -> float:
-    return (volume_uL * factor) + backlash
+        # Machine settings
+        try:
+            self.Z_slow = self.config.getint("Machine", "Z_slow")
+            self.Z_max  = self.config.getint("Machine", "Z_max")
+            self.Z_min  = self.config.getint("Machine", "Z_min")
+            self.Fz     = self.config.getint("Machine", "Fz")
+            self.Fxy    = self.config.getint("Machine", "Fxy")
+            self.Fa_push = self.config.getint("Machine", "Fa_push")
+            self.Fa_push_slow = self.config.getint("Machine", "Fa_push_slow")
+            self.Fa_pull = self.config.getint("Machine", "Fa_pull")
+            self.Rest_x  = self.config.getint("Machine", "Rest_x")
+            self.Rest_y  = self.config.getint("Machine", "Rest_y")
+        except Exception as e:
+            self._fatal(f"Machine settings missing/invalid:\n{e!s}")
 
+        # Active syringe (filled in _update_syringe)
+        self.syringe_name = ""
+        self.factor = 0.0
+        self.backlash = 0.0
+        self.syringe_vol = 0
 
-def vial_s(vial_index: int) -> tuple[float, float]:
-    col = vial_index // vials_per_row
-    row = vial_index % vials_per_row
-    total_vials = vials_per_row * columns
-    if vial_index >= total_vials:
-        raise ValueError(f"Vial index out of bounds {total_vials}")
-    x = vial1_s[0] + col * dx_s
-    y = vial1_s[1] + row * dy_s
-    return x, y
+        # --- UI ---
+        central = QWidget(self); self.setCentralWidget(central)
+        root = QVBoxLayout(central); root.setContentsMargins(16,16,16,16); root.setSpacing(12)
 
+        # Syringe row
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Syringe:"))
+        self.cmb_syringe = QComboBox()
+        self.cmb_syringe.addItems(self.available_syringes)
+        self.cmb_syringe.currentIndexChanged.connect(self._update_syringe)
+        row.addWidget(self.cmb_syringe, 1)
+        root.addLayout(row)
 
-def flush(volume_uL: float, repeats: int = 1):
-    for _ in range(repeats):
-        remove_from_vial(solvent1_x, solvent1_y, volume_uL)
-        g.absolute()
-        g.move(z=Z_max, F=Fz)
-        g.move(x=vial_waste[0], y=vial_waste[1], F=Fxy)
-        g.move(z=Z_min, F=Fz)
-        g.move(A=0, F=Fa_push)
-        g.move(z=Z_max, F=Fz)
+        # Syringe info
+        info = QHBoxLayout()
+        self.lbl_backlash = QLabel("Backlash: — mm")
+        self.lbl_size = QLabel("Size: — µL")
+        info.addWidget(self.lbl_backlash); info.addStretch(1); info.addWidget(self.lbl_size)
+        root.addLayout(info)
 
+        # Inputs: X, Y, Pause (s)
+        form = QFormLayout(); form.setLabelAlignment(Qt.AlignRight)
 
-def fill_vial(x: float, y: float, non_contact: bool = False):
-    g.write("fill_vial")
-    g.absolute()
-    g.move(z=Z_max, F=Fz)
-    g.move(x=x, y=y, F=Fxy)
-    if non_contact:
-        g.move(z=Z_slow, F=Fz)
-    else:
-        g.move(z=Z_min, F=Fz)
-    g.move(A=0, F=Fa_push)
-    g.absolute()
-    g.move(z=Z_max, F=Fz)
+        self.spn_x = QDoubleSpinBox(); self.spn_x.setRange(-1e6,1e6); self.spn_x.setDecimals(3); self.spn_x.setValue(10.0)
+        self.spn_y = QDoubleSpinBox(); self.spn_y.setRange(-1e6,1e6); self.spn_y.setDecimals(3); self.spn_y.setValue(185.0)
 
+        self.spn_pause_s = QDoubleSpinBox()
+        self.spn_pause_s.setRange(0.0, 1e6)
+        self.spn_pause_s.setDecimals(3)
+        self.spn_pause_s.setValue(10.0)
 
-def remove_from_vial(x: float, y: float, volume_uL: float):
-    g.write("remove_from_vial")
-    g.absolute()
-    g.move(z=Z_max, F=Fz)
-    g.move(x=x, y=y, F=Fxy)
-    g.move(z=Z_min, F=Fz)
-    g.move(A=syringe(volume_uL), F=Fa_pull)
-    g.move(z=Z_max, F=Fz)
+        form.addRow("X [mm]:", self.spn_x)
+        form.addRow("Y [mm]:", self.spn_y)
+        form.addRow("Pause [s]:", self.spn_pause_s)
+        root.addLayout(form)
 
+        self.chk_initial_flush = QCheckBox("Initial Flush (3× 500 µL)")
+        self.chk_initial_flush.setChecked(True)
+        root.addWidget(self.chk_initial_flush)
 
-def home():
-    g.absolute()
-    g.move(z=Z_max, F=Fz)
-    g.move(x=Rest_x, y=Rest_y, F=Fxy)
-    g.move(A=0, F=Fa_pull)
-    g.move(z=Z_min, F=Fz)
-    g.write("M84")
+        btn = QPushButton("Generate G-code")
+        btn.clicked.connect(self._on_generate)
+        root.addWidget(btn, alignment=Qt.AlignRight)
 
+        self._update_syringe()   # initialize
+        self.g: G | None = None  # mecode handle
 
-def generate_g_code_fast(
-    syringe_vol: int,
-    pause: int,
-    x: float,
-    y: float,
-    n_vials_per_vol: int = 3,
-    n_data_points: int = 10,
-    initial_flush: bool = True,
-):
-    """
-    Creates a G-code for calibration (same behavior as your Tk version).
+    # --------- helpers ----------
+    def _fatal(self, msg: str):
+        QMessageBox.critical(self, "Configuration error", msg)
+        sys.exit(1)
 
-    :param syringe_vol: Syringe size (µL)
-    :param x: X coordinate of the scale vial
-    :param y: Y coordinate of the scale vial
-    :param n_vials_per_vol: vials per volume point
-    :param n_data_points: number of volumes
-    :param pause: wait time between dispenses [ms]
-    :param initial_flush: whether to pre-flush
-    """
-    global g
+    def _update_syringe(self):
+        self.syringe_name = self.cmb_syringe.currentText()
+        try:
+            self.factor = self.config.getfloat(self.syringe_name, "theoretical_factor")
+            self.backlash = self.config.getfloat(self.syringe_name, "backlash_correction")
+            self.syringe_vol = self.config.getint(self.syringe_name, "max_volume")
+        except Exception as e:
+            self._fatal(f"Syringe '{self.syringe_name}' missing keys:\n{e!s}")
+        self.lbl_backlash.setText(f"Backlash: {self.backlash} mm")
+        self.lbl_size.setText(f"Size: {self.syringe_vol} µL")
 
-    # Qt file save dialog
-    filepath, _ = QFileDialog.getSaveFileName(
-        None, "Save G-code", "calibration.gcode", "G-code (*.gcode)"
-    )
-    if not filepath:
-        QMessageBox.warning(None, "File Not Saved",
-                            "No file was selected. G-code generation was canceled.")
-        return
+    # --------- kinematics / moves ----------
+    def syringe_steps_for(self, volume_uL: float) -> float:
+        return (volume_uL * self.factor) + self.backlash
 
-    g = G(outfile=filepath)
-    g.write("G21")  # mm
-    g.write("G28")  # home
+    def flush(self, volume_uL: float, repeats: int = 1):
+        for _ in range(repeats):
+            self.remove_from_vial(self.solvent1_x, self.solvent1_y, volume_uL)
+            self.g.absolute()
+            self.g.move(z=self.Z_max, F=self.Fz)
+            self.g.move(x=self.vial_waste[0], y=self.vial_waste[1], F=self.Fxy)
+            self.g.move(z=self.Z_min, F=self.Fz)
+            self.g.move(A=0, F=self.Fa_push)
+            self.g.move(z=self.Z_max, F=self.Fz)
 
-    if initial_flush:
-        flush(500, repeats=3)  # same as original example
+    def fill_vial(self, x: float, y: float, non_contact: bool = False):
+        self.g.write("fill_vial")
+        self.g.absolute()
+        self.g.move(z=self.Z_max, F=self.Fz)
+        self.g.move(x=x, y=y, F=self.Fxy)
+        self.g.move(z=(self.Z_slow if non_contact else self.Z_min), F=self.Fz)
+        self.g.move(A=0, F=self.Fa_push)
+        self.g.absolute()
+        self.g.move(z=self.Z_max, F=self.Fz)
 
-    start = 0.1 * syringe_vol
-    stop = syringe_vol
-    steps = n_data_points
+    def remove_from_vial(self, x: float, y: float, volume_uL: float):
+        self.g.write("remove_from_vial")
+        self.g.absolute()
+        self.g.move(z=self.Z_max, F=self.Fz)
+        self.g.move(x=x, y=y, F=self.Fxy)
+        self.g.move(z=self.Z_min, F=self.Fz)
+        self.g.move(A=self.syringe_steps_for(volume_uL), F=self.Fa_pull)
+        self.g.move(z=self.Z_max, F=self.Fz)
 
-    volumes = np.linspace(start=start, stop=stop, num=steps)
-    vials_count = n_vials_per_vol * np.ones_like(volumes, dtype=int)
-    current_vial = 0
+    def home(self):
+        self.g.absolute()
+        self.g.move(z=self.Z_max, F=self.Fz)
+        self.g.move(x=self.Rest_x, y=self.Rest_y, F=self.Fxy)
+        self.g.move(A=0, F=self.Fa_pull)
+        self.g.move(z=self.Z_min, F=self.Fz)
+        self.g.write("M84")
 
-    for vol_index, count in enumerate(vials_count):
-        for i in range(count):
-            volume = float(volumes[vol_index])
-            g.dwell(pause)  # ms
-            remove_from_vial(solvent1_x, solvent1_y, volume)
-            fill_vial(x, y)  # non_contact=False default (same as original)
-            current_vial += 1
+    # --------- main action ----------
+    def _on_generate(self):
+        x = float(self.spn_x.value())
+        y = float(self.spn_y.value())
+        pause_ms = int(round(float(self.spn_pause_s.value()) * 1000.0))
+        initial_flush = self.chk_initial_flush.isChecked()
 
-    home()
-    QMessageBox.information(None, "Success", "G-code generation complete!")
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Save G-code", "calibration.gcode", "G-code (*.gcode)"
+        )
+        if not path:
+            QMessageBox.warning(self, "Canceled", "No file selected. G-code generation canceled.")
+            return
+
+        try:
+            self.g = G(outfile=path)
+            self.g.write("G21")  # mm
+            self.g.write("G28")  # home
+
+            if initial_flush:
+                self.flush(500, repeats=3)
+
+            # Same “fast” pattern: 10 points from 10%→100%, 3 vials each
+            start = 0.1 * self.syringe_vol
+            stop  = self.syringe_vol
+            steps = 10
+            n_vials_per_vol = 3
+
+            volumes = np.linspace(start=start, stop=stop, num=steps)
+            vials_count = n_vials_per_vol * np.ones_like(volumes, dtype=int)
+
+            current_vial = 0
+            for vol_index, count in enumerate(vials_count):
+                for _ in range(count):
+                    volume = float(volumes[vol_index])
+                    self.g.dwell(pause_ms)
+                    self.remove_from_vial(self.solvent1_x, self.solvent1_y, volume)
+                    self.fill_vial(x, y)
+                    current_vial += 1
+
+            self.home()
+            self.g = None
+            QMessageBox.information(self, "Success", f"G-code written to:\n{path}")
+
+        except Exception as e:
+            QMessageBox.critical(self, "G-code Error", str(e))
 
 
 def main():
     app = QApplication(sys.argv)
-
-    # --- load config.ini like original ---
-    global config, available_syringes, syringe_name, factor, backlash, syringe_vol
-    global vial1_s, dx_s, dy_s, solvent1_x, solvent1_y, vial_waste, vials_per_row, columns
-    global Z_slow, Z_max, Z_min, Fz, Fxy, Fa_push, Fa_push_slow, Fa_pull, Rest_x, Rest_y
-
-    config = configparser.ConfigParser()
-    if not config.read("config.ini"):
-        QMessageBox.critical(None, "Error", "No config.ini found in the working directory.")
-        sys.exit(1)
-
-    available_syringes = [s for s in config.sections() if "syringe" in s.lower()]
-    if not available_syringes:
-        QMessageBox.critical(None, "Error", "No sections containing 'syringe' found in config.ini.")
-        sys.exit(1)
-
-    # Show a Qt combo dialog instead of input()
-    syringe_name, ok = QInputDialog.getItem(
-        None,
-        "Select Syringe",
-        "Choose a syringe section from config.ini:",
-        available_syringes,
-        0,
-        False,
-    )
-    if not ok:
-        sys.exit(0)
-
-    # Syringe params
-    factor = config.getfloat(syringe_name, "theoretical_factor")
-    backlash = config.getfloat(syringe_name, "backlash_correction")
-    syringe_vol = config.getint(syringe_name, "max_volume")
-
-    # Rack settings (keep same getint/getfloat pattern)
-    vial1_s = [config.getfloat("Rack", "vial1_x"), config.getfloat("Rack", "vial1_y")]
-    dx_s = config.getint("Rack", "dx_s")  # keep as int like original
-    dy_s = config.getint("Rack", "dy_s")
-    solvent1_x = config.getfloat("Rack", "solvent1_x")
-    solvent1_y = config.getfloat("Rack", "solvent1_y")
-    vial_waste = [config.getfloat("Rack", "waste_x"), config.getfloat("Rack", "waste_y")]
-    vials_per_row = config.getint("Rack", "vials_per_row")
-    columns = config.getint("Rack", "columns")
-
-    # Machine settings (keep getint like original script)
-    Z_slow = config.getint("Machine", "Z_slow")
-    Z_max = config.getint("Machine", "Z_max")
-    Z_min = config.getint("Machine", "Z_min")
-    Fz = config.getint("Machine", "Fz")
-    Fxy = config.getint("Machine", "Fxy")
-    Fa_push = config.getint("Machine", "Fa_push")
-    Fa_push_slow = config.getint("Machine", "Fa_push_slow")
-    Fa_pull = config.getint("Machine", "Fa_pull")
-    Rest_x = config.getint("Machine", "Rest_x")
-    Rest_y = config.getint("Machine", "Rest_y")
-
-    # --- defaults matching your __main__ ---
-    x = 10
-    y = 185
-    pause = 10 * 1000  # seconds -> ms
-
-    # Run once (dialogs are modal; no need to app.exec())
-    generate_g_code_fast(syringe_vol=syringe_vol, pause=pause, x=x, y=y)
-    sys.exit(0)
+    w = FastCalibrationWindow()
+    w.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

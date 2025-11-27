@@ -102,7 +102,7 @@ class FastCalibrationWindow(QMainWindow):
         form.addRow("Pause [s]:", self.spn_pause_s)
         root.addLayout(form)
 
-        self.chk_initial_flush = QCheckBox("Initial Flush (3× 500 µL)")
+        self.chk_initial_flush = QCheckBox("Initial Flush (3×500 µL)")
         self.chk_initial_flush.setChecked(True)
         root.addWidget(self.chk_initial_flush)
 
@@ -190,12 +190,12 @@ class FastCalibrationWindow(QMainWindow):
             self.g.write("G28")  # home
 
             if initial_flush:
-                self.flush(500, repeats=3)
+                self.flush(self.syringe_vol/2, repeats=3)
 
             # Same “fast” pattern: 10 points from 10%→100%, 3 vials each
             start = 0.1 * self.syringe_vol
             stop  = self.syringe_vol
-            steps = 10
+            steps = 5
             n_vials_per_vol = 3
 
             volumes = np.linspace(start=start, stop=stop, num=steps)

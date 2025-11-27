@@ -150,8 +150,8 @@ def generate_g_code_fast(syringe_vol: int,
 
 
 if __name__ == '__main__':
-    x = 100
-    y = 100
+    x = 10
+    y = 185
     pause = 10 * 1000 # convert [s] to [ms]
     generate_g_code_fast(syringe_vol=syringe_vol, pause=pause, x=x, y=y)
 

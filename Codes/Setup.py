@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, PositiveFloat, model_validator, ConfigDict
 from typing import Optional, Callable, List
-from SyringeSolventLink import SyringeSolvent
+from SyringeSolventLink import SyringeSolventLink
 from Syringe import Syringe
 from Solvent import Solvent
 
@@ -9,7 +9,7 @@ class Setup(BaseModel):
     name: str
     syringes: List[Syringe] = Field(default_factory=list)
     solvents: List[Solvent] = Field(default_factory=list)
-    syringe_solvents: List[SyringeSolvent] = Field(default_factory=list)
+    syringe_solvents: List[SyringeSolventLink] = Field(default_factory=list)
 
     # Keep the model consistent even when attributes are modified later
     model_config = ConfigDict(validate_assignment=True)

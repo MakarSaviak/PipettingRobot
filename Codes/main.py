@@ -1,488 +1,670 @@
+# LiquidHandling_PySide6.py
+from __future__ import annotations
+
+import sys
 import configparser
 import pandas as pd
-import tkinter as tk
-from tkinter import ttk, messagebox, filedialog, simpledialog
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QCheckBox, QScrollArea, QFrame, QLineEdit,
+    QFileDialog, QMessageBox
+)
+
 from mecode import G
 
-# Initialize the global G object
-g = G()
 
-# Load configuration
-config = configparser.ConfigParser()
-config.read('config.ini')
-print("Sections found:", config.sections())
-if not config.sections():
-    raise ValueError("No configuration sections found in the file.")
+class LiquidHandlingWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Liquid Handling System (PySide6)")
+        self.resize(800, 600)
 
+        # ---- Load config.ini ----
+        self.config = configparser.ConfigParser()
+        if not self.config.read("config.ini"):
+            self._fatal("No config.ini found in the working directory.")
 
-#Syringe settings for syringe 1
-factor_1 = config.getfloat('Syringe_1', 'theoretical_factor') 
-backlash_1 = config.getfloat('Syringe_1', 'backlash_correction')
-vol_max_1 = config.getint('Syringe_1', 'max_volume')
-vol_min_1 = config.getint('Syringe_1', 'min_volume')
-#Syringe settings for syringe 2
-factor_2 = config.getfloat('Syringe_2', 'theoretical_factor') 
-backlash_2 = config.getfloat('Syringe_2', 'backlash_correction')
-vol_max_2 = config.getint('Syringe_2', 'max_volume')
-vol_min_2 = config.getint('Syringe_2', 'min_volume')
-syringe2_offset_x = config.getfloat('Syringe_2', 'syringe2_offset_x')
-syringe2_offset_y = config.getfloat('Syringe_2', 'syringe2_offset_y')
+        # Syringe 1 settings
+        try:
+            self.factor_1 = self.config.getfloat("Syringe_1", "theoretical_factor")
+            self.backlash_1 = self.config.getfloat("Syringe_1", "backlash_correction")
+            self.vol_max_1 = self.config.getint("Syringe_1", "max_volume")
+            self.vol_min_1 = self.config.getint("Syringe_1", "min_volume")
+        except Exception as e:
+            self._fatal(f"Syringe_1 settings missing/invalid:\n{e!s}")
 
-def syringe(volume):
-    if volume <= vol_max_1 and volume >= vol_min_1:
-        syringe_type = 1
-        return (volume * factor_1) + backlash_1, syringe_type
-    elif volume < vol_max_2 and volume >= vol_min_2:
-        syringe_type = 2
-        return (volume * factor_2) + backlash_2, syringe_type
-    else:
-        messagebox.showerror("Error", f"Volume out of Range; Please enter a volume between {vol_min_1} and {vol_max_2}")
+        # Syringe 2 settings
+        try:
+            self.factor_2 = self.config.getfloat("Syringe_2", "theoretical_factor")
+            self.backlash_2 = self.config.getfloat("Syringe_2", "backlash_correction")
+            self.vol_max_2 = self.config.getint("Syringe_2", "max_volume")
+            self.vol_min_2 = self.config.getint("Syringe_2", "min_volume")
+            self.syringe2_offset_x = self.config.getfloat("Syringe_2", "syringe2_offset_x")
+            self.syringe2_offset_y = self.config.getfloat("Syringe_2", "syringe2_offset_y")
+        except Exception as e:
+            self._fatal(f"Syringe_2 settings missing/invalid:\n{e!s}")
 
+        # Rack settings
+        try:
+            self.vial1_s = [self.config.getfloat("Rack", "vial1_x"),
+                            self.config.getfloat("Rack", "vial1_y")]
+            self.dx_s = self.config.getfloat("Rack", "dx_s")
+            self.dy_s = self.config.getfloat("Rack", "dy_s")
+            self.solvent1_x = self.config.getfloat("Rack", "solvent1_x")
+            self.solvent1_y = self.config.getfloat("Rack", "solvent1_y")
+            self.solvent_y_increment = self.config.getint("Rack", "increment_y")
+            self.vial_waste = [self.config.getfloat("Rack", "waste_x"),
+                               self.config.getfloat("Rack", "waste_y")]
+            self.vials_per_row = self.config.getint("Rack", "vials_per_row")
+            self.columns = self.config.getint("Rack", "columns")
+            self.solvent_number = self.config.getint("Rack", "number_of_solvents")
+        except Exception as e:
+            self._fatal(f"Rack settings missing/invalid:\n{e!s}")
 
-#Vial Locations    
-vial1_s = [config.getfloat('Rack', 'vial1_x'), config.getfloat('Rack', 'vial1_y')]
-dx_s = config.getint('Rack', 'dx_s')
-dy_s = config.getint('Rack', 'dy_s')
-solvent1_x = config.getfloat('Rack', 'solvent1_x')
-solvent1_y = config.getfloat('Rack', 'solvent1_y')  
-solvent_y_increment = config.getint('Rack', 'increment_y')
-vial_waste = [config.getfloat('Rack', 'waste_x'), config.getfloat('Rack', 'waste_y')]
-vials_per_row = config.getint('Rack', 'vials_per_row')
-columns = config.getint('Rack', 'columns')
-solvent_number = config.getint('Rack', 'number_of_solvents')
+        # Machine settings
+        try:
+            self.Z_slow = self.config.getint("Machine", "Z_slow")
+            self.Z_max = self.config.getint("Machine", "Z_max")
+            self.Z_min = self.config.getint("Machine", "Z_min")
+            self.Fz = self.config.getint("Machine", "Fz")
+            self.Fxy = self.config.getint("Machine", "Fxy")
+            self.Fa_push = self.config.getint("Machine", "Fa_push")
+            self.Fa_push_slow = self.config.getint("Machine", "Fa_push_slow")
+            self.Fa_pull = self.config.getint("Machine", "Fa_pull")
+            self.Rest_x = self.config.getint("Machine", "Rest_x")
+            self.Rest_y = self.config.getint("Machine", "Rest_y")
+        except Exception as e:
+            self._fatal(f"Machine settings missing/invalid:\n{e!s}")
 
+        # Derived positions
+        self.solvent_positions = {
+            f"Solvent_{i}": [
+                self.solvent1_x,
+                self.solvent1_y + ((i - 1) * self.solvent_y_increment),
+            ]
+            for i in range(1, self.solvent_number + 1)
+        }
 
-#Machine Settings
-Z_slow = config.getint('Machine', 'Z_slow')
-Z_max = config.getint('Machine', 'Z_max')
-Z_min = config.getint('Machine', 'Z_min')
-Fz = config.getint('Machine', 'Fz')
-Fxy = config.getint('Machine', 'Fxy')
-Fa_push = config.getint('Machine', 'Fa_push')
-Fa_push_slow = config.getint('Machine', 'Fa_push_slow')
-Fa_pull = config.getint('Machine', 'Fa_pull')
-Rest_x = config.getint('Machine', 'Rest_x')
-Rest_y = config.getint('Machine', 'Rest_y')
+        # State
+        self.solvents: list[str] = [f"Solvent_{i+1}" for i in range(self.solvent_number)]
+        self.solvent_slow_push_vars: dict[str, QCheckBox] = {}
+        self.vial_entries: list[list] = []  # [frame, (QLineEdit, QCheckBox Flush), ...]
 
+        self.chk_mode_vial: QCheckBox | None = None
+        self.chk_mode_solvent: QCheckBox | None = None
+        self.lbl_vials_count: QLabel | None = None
+        self.headers_layout: QHBoxLayout | None = None
+        self.inputs_layout: QVBoxLayout | None = None
 
-# Calculating positions of vials
-def vial_s(vial_index, syringe_type=1):
-    # Determine the row and column based on the vial index
-    row = vial_index // vials_per_row
-    col = vial_index % vials_per_row
-    # Calculate the number of vials in the rack
-    total_vials = vials_per_row * columns
-    # Check if the vial index is out of bounds
-    if vial_index >= total_vials:
-        messagebox.showwarning("Error", "Vial index out of bounds. Rack only has {} vials.".format(total_vials))
-        return None
-    # X-coordinate changes with the row
-    x = vial1_s[0] + row * dx_s
-    # Y-coordinate increments based on the column within the respective row
-    y = vial1_s[1] + col * dy_s
-    return x, y
+        self.g: G | None = None
 
+        # --- UI ---
+        self._build_ui()
 
-# Calculating positions of solvents
-solvent_positions = {
-    f'Solvent_{i}': [solvent1_x, solvent1_y + ((i-1) * solvent_y_increment)] for i in range(1, solvent_number + 1)
-}
+    # --------- helpers ----------
+    def _fatal(self, msg: str):
+        QMessageBox.critical(self, "Configuration error", msg)
+        sys.exit(1)
 
-# Flushes the syringe with a solvent and puts it to waste
-def flush(volume, repeats=1, solvent_name='Solvent_1'):
-    g.write("flush")
-    solvent_position = solvent_positions[solvent_name]
-    for _ in range(repeats):
-        displacement, syringe_type = syringe(volume)
-        remove_from_vial(*solvent_position, volume)
-        g.write("fill_vial")
-        g.absolute()
-        if syringe_type == 2:
-            adjusted_waste_position = (
-            vial_waste[0] + syringe2_offset_x,
-            vial_waste[1] + syringe2_offset_y
+    def _build_ui(self):
+        central = QWidget(self)
+        self.setCentralWidget(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(16, 16, 16, 16)
+        root.setSpacing(10)
+
+        # Top bar: save / load
+        top = QHBoxLayout()
+        root.addLayout(top)
+
+        btn_export = QPushButton("Export Excel")
+        btn_export.clicked.connect(self.on_save_method)
+        top.addWidget(btn_export)
+
+        btn_import = QPushButton("Import Excel/CSV")
+        btn_import.clicked.connect(self.on_load_method)
+        top.addWidget(btn_import)
+
+        top.addStretch(1)
+
+        # Mode / vial buttons
+        mode = QHBoxLayout()
+        root.addLayout(mode)
+
+        btn_add_vial = QPushButton("Add Vial")
+        btn_add_vial.clicked.connect(self.add_vial)
+        mode.addWidget(btn_add_vial)
+
+        btn_remove_vial = QPushButton("Remove Vial")
+        btn_remove_vial.clicked.connect(self.remove_vial)
+        mode.addWidget(btn_remove_vial)
+
+        self.chk_mode_vial = QCheckBox("Vial after Vial")
+        self.chk_mode_solvent = QCheckBox("Solvent after Solvent")
+        self.chk_mode_vial.setChecked(True)
+        self.chk_mode_solvent.setChecked(False)
+
+        self.chk_mode_vial.stateChanged.connect(
+            lambda _: self.on_mode_checkbox_changed(self.chk_mode_vial)
+        )
+        self.chk_mode_solvent.stateChanged.connect(
+            lambda _: self.on_mode_checkbox_changed(self.chk_mode_solvent)
+        )
+
+        mode.addWidget(self.chk_mode_vial)
+        mode.addWidget(self.chk_mode_solvent)
+
+        self.lbl_vials_count = QLabel("Vials: 0")
+        mode.addWidget(self.lbl_vials_count)
+
+        mode.addStretch(1)
+
+        btn_generate = QPushButton("Generate G-Code")
+        btn_generate.clicked.connect(self.on_generate_gcode)
+        mode.addWidget(btn_generate)
+
+        # Headers
+        headers_widget = QWidget()
+        self.headers_layout = QHBoxLayout(headers_widget)
+        self.headers_layout.setContentsMargins(5, 5, 5, 5)
+        root.addWidget(headers_widget)
+
+        # Scrollable vial list
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll_content = QWidget()
+        self.inputs_layout = QVBoxLayout(scroll_content)
+        scroll.setWidget(scroll_content)
+        root.addWidget(scroll, 1)
+
+        # Build headers and initial vials
+        self.setup_solvent_headers()
+        for _ in range(10):
+            self.add_vial()
+
+    def update_vials_count_label(self):
+        if self.lbl_vials_count is not None:
+            self.lbl_vials_count.setText(f"Vials: {len(self.vial_entries)}")
+
+    # --------- syringe / moves ----------
+    def syringe(self, volume: float) -> tuple[float, int]:
+        if self.vol_min_1 <= volume <= self.vol_max_1:
+            syringe_type = 1
+            return (volume * self.factor_1) + self.backlash_1, syringe_type
+        elif self.vol_min_2 <= volume < self.vol_max_2:
+            syringe_type = 2
+            return (volume * self.factor_2) + self.backlash_2, syringe_type
+        else:
+            QMessageBox.critical(
+                self,
+                "Volume error",
+                f"Volume out of range; please enter a volume between "
+                f"{self.vol_min_1} and {self.vol_max_2} µL."
             )
-            g.move(B=Z_max, F=Fz)
-            g.move(adjusted_waste_position[0], adjusted_waste_position[1], F=Fxy)
-            g.move(B=Z_min, F=Fz)
-            g.move(C=0, F=Fa_push)
-            g.move(B=Z_max, F=Fz)
-        else:
-            g.move(z=Z_max, F=Fz)
-            g.move(vial_waste[0], vial_waste[1], F=Fxy)
-            g.move(z=Z_min, F=Fz)
-            g.move(A=0, F=Fa_push)
-            g.move(z=Z_max, F=Fz)
-        
-def fill_vial(x, y, volume, solvent_name):
-    slow_push = solvent_slow_push_vars[solvent_name].get()
-    g.write("fill_vial")
-    g.absolute()
-    displacement, syringe_type = syringe(volume)
-    adjusted_x, adjusted_y = x, y
-    if syringe_type == 2:
-        adjusted_x += syringe2_offset_x
-        adjusted_y += syringe2_offset_y
-        g.move(B=Z_max, F=Fz)  # Move second Z-axis to safe height
-        g.move(adjusted_x, adjusted_y, F=Fxy)
-        if slow_push:
-            g.move(B=Z_slow, F=Fz)
-            g.move(C=0, F=Fa_push_slow)
-            print("slow push")
-        else:
-            g.move(B=Z_min, F=Fz)
-            g.move(C=0, F=Fa_push)
-        g.move(B=Z_max, F=Fz)  # Move second Z-axis up
-    else:
-        g.move(z=Z_max, F=Fz)
-        g.move(adjusted_x, adjusted_y, F=Fxy)
-        if slow_push:
-            g.move(z=Z_slow, F=Fz)
-            g.move(A=0, F=Fa_push_slow)
-            print("slow push")
-        else:
-            g.move(z=Z_min, F=Fz)
-            g.move(A=0, F=Fa_push)
-        g.move(z=Z_max, F=Fz)
-    
-def remove_from_vial(x, y, volume):
-    g.write("remove_from_vial")
-    g.absolute()
-    displacement, syringe_type = syringe(volume)
-    adjusted_x, adjusted_y = x, y
-    if syringe_type == 2:
-        adjusted_x += syringe2_offset_x
-        adjusted_y += syringe2_offset_y
-        g.move(B=Z_max, F=Fz)  # Move Z-axis to safe height
-        g.move(adjusted_x, adjusted_y, F=Fxy)  # Move to solvent position
-        g.move(B=Z_min, F=Fz)  # Move second Z-axis down
-        g.relative()
-        g.move(C=displacement, F=Fa_pull)  # Move second syringe
-        g.absolute()
-        g.move(B=Z_max, F=Fz)  # Move second Z-axis up
-    else:
-        g.move(z=Z_max, F=Fz)
-        g.move(adjusted_x, adjusted_y, F=Fxy)
-        g.move(z=Z_min, F=Fz)
-        g.relative()
-        g.move(A=displacement, F=Fa_pull)
-        g.absolute()
-        g.move(z=Z_max, F=Fz)
-    
-def home():
-    g.absolute()
-    g.move(z=Z_max, B=Z_max, F=Fz)
-    g.move(Rest_x, Rest_y, F=Fxy)
-    g.move(z=Z_min,B=Z_min, F=Fz)
-    g.write('M84')  # Turns off the drivers (Z-axis drops)
+            raise ValueError("Volume out of range")
 
-############################################
-def generate_g_code():
-    global g
-    # Prompt the user for a filename
-    filepath = filedialog.asksaveasfilename(defaultextension=".gcode", filetypes=[("G-code files", "*.gcode")])
-    # Check if a path was selected
-    if filepath:  
-        g = G(outfile=filepath)
-        # Set units to millimeters
-        g.write("G21")
-        # Perform homing command
-        g.write("G28 Z B") # Homes both Z-axis
-        g.write("G28 Y X A C") # Homes other axes
-        if fill_vial_mode_var.get(): 
-            for vial_index, entries in enumerate(vial_entries, start=1):
-                for solvent_index, (entry, flush_var) in enumerate(entries[1:]): 
-                    volume = entry.get()
-                    flush_required = flush_var.get()
-                    solvent_name = solvents[solvent_index]
-                    if volume:
-                        process_vial(float(volume), flush_required, solvent_name, vial_index)
-                        
-        elif fill_solvent_mode_var.get():
-            for solvent_index, solvent_name in enumerate(solvents):
-                for vial_index, entries in enumerate(vial_entries, start=1):
-                    entry, flush_var = entries[1:][solvent_index]
-                    volume = entry.get()
-                    flush_required = flush_var.get()
-                    if volume:
-                        process_vial(float(volume), flush_required, solvent_name, vial_index)
-        home()
-        print("G-code generation complete!")
-        messagebox.showinfo("G-Code Generation Complete", "The G-code generation process has finished. Please restart the program for the next file generation.")
-        root.destroy()
-    else:
-        messagebox.showwarning("File Not Saved", "No file was selected. G-code generation was canceled.")
+    def vial_position(self, vial_index: int) -> tuple[float, float] | None:
+        row = vial_index // self.vials_per_row
+        col = vial_index % self.vials_per_row
+        total_vials = self.vials_per_row * self.columns
+        if vial_index >= total_vials:
+            QMessageBox.warning(
+                self,
+                "Vial index error",
+                f"Vial index out of bounds. Rack only has {total_vials} vials."
+            )
+            return None
+        x = self.vial1_s[0] + row * self.dx_s
+        y = self.vial1_s[1] + col * self.dy_s
+        return x, y
 
-    
-def process_vial(volume, flush_required, solvent_name, vial_index):
-    volume = float(volume)
-    if flush_required:
-        flush(volume, solvent_name=solvent_name)
-    print(f"Picking up {volume}µL of {solvent_name}")
-    solvent_position = solvent_positions[solvent_name]
-    displacement, syringe_type = syringe(volume)
-    remove_from_vial(*solvent_position, volume)
-    x, y = vial_s(vial_index - 1)
-    fill_vial(x, y, volume, solvent_name)
-
-
-
-#GUI functions
-def add_vial():
-    frame = ttk.Frame(inputs_frame, relief='groove', borderwidth=2)
-    frame.pack(fill='x', padx=5, pady=5, expand=True)
-    vial_number = len(vial_entries) + 1
-    vial_label = f"Vial {str(vial_number).zfill(2)}:" 
-    ttk.Label(frame, text=vial_label).pack(side='left', padx=(5, 20))
-    vial_entry_group = [frame]  
-    for i, solvent in enumerate(solvents):
-        entry_frame = ttk.Frame(frame)
-        entry_frame.pack(side='left', padx=(5, 5 if i < len(solvents) - 1 else 0))
-        entry = ttk.Entry(entry_frame, width=10)
-        entry.pack(side='left')
-        flush_cb_var = tk.BooleanVar()
-        flush_cb = ttk.Checkbutton(entry_frame, text='Flush', variable=flush_cb_var)
-        flush_cb.pack(side='left')
-        vial_entry_group.append((entry, flush_cb_var))
-    vial_entries.append(vial_entry_group)
-    update_vials_count_label()
-
-
-def remove_vial():
-    if vial_entries:
-        last_vial_frame = vial_entries.pop()
-        last_vial_frame[0].destroy()
-        update_vials_count_label()
-
-
-def update_vials_count_label():
-    vials_count_label.config(text=f"Vials: {len(vial_entries)}")
-    
-    
-def setup_solvent_headers():
-    column_index = 0
-    ttk.Label(headers_frame, text="Position").grid(row=0, column=column_index, padx=(5, 11), sticky='w')  # Adjust padding as needed
-    column_index += 1
-    for solvent in solvents:
-        header_frame = ttk.Frame(headers_frame)
-        header_frame.grid(row=0, column=column_index, padx=8, sticky='w')
-        ttk.Label(header_frame, text=f"{solvent}", width=10).pack(side='left')
-        slow_push_var = tk.BooleanVar()
-        ttk.Checkbutton(header_frame, text='Slow', variable=slow_push_var).pack(side='left')
-        solvent_slow_push_vars[solvent] = slow_push_var
-        column_index += 1
-
-
-def enforce_checkbox_exclusivity(checked_var):
-    if checked_var == fill_vial_mode_var:
-        if fill_vial_mode_var.get():
-            fill_solvent_mode_var.set(False)
-        else:
-            fill_solvent_mode_var.set(True)
-    elif checked_var == fill_solvent_mode_var:
-        if fill_solvent_mode_var.get():
-            fill_vial_mode_var.set(False)
-        else:
-            fill_vial_mode_var.set(True)
-            
-
-def save_method():
-    include_flush = messagebox.askyesno("Export Options", "Do you want to export flush information as well?")
-    
-    # Build a table-like structure for all vials and solvents
-    method_data = {"Vial": []}
-    for solvent in solvents:
-        method_data[solvent] = []
-        if include_flush:
-            method_data[f"{solvent}_Flush"] = []
-
-    for vial_index, vial_group in enumerate(vial_entries, start=1):
-        method_data["Vial"].append(vial_index)
-        for i, solvent in enumerate(solvents):
-            entry, flush_var = vial_group[1:][i]
-            volume_value = entry.get()
-            
-            if volume_value:
-                method_data[solvent].append(volume_value)
-                if include_flush:
-                    method_data[f"{solvent}_Flush"].append(flush_var.get())
+    def flush(self, volume: float, repeats: int = 1, solvent_name: str = "Solvent_1"):
+        if self.g is None:
+            return
+        self.g.write("flush")
+        solvent_pos = self.solvent_positions[solvent_name]
+        for _ in range(repeats):
+            displacement, syringe_type = self.syringe(volume)
+            self.remove_from_vial(solvent_pos[0], solvent_pos[1], volume)
+            self.g.write("fill_vial")
+            self.g.absolute()
+            if syringe_type == 2:
+                adjusted_waste = (
+                    self.vial_waste[0] + self.syringe2_offset_x,
+                    self.vial_waste[1] + self.syringe2_offset_y,
+                )
+                self.g.move(B=self.Z_max, F=self.Fz)
+                self.g.move(adjusted_waste[0], adjusted_waste[1], F=self.Fxy)
+                self.g.move(B=self.Z_min, F=self.Fz)
+                self.g.move(C=0, F=self.Fa_push)
+                self.g.move(B=self.Z_max, F=self.Fz)
             else:
-                method_data[solvent].append("")
-                if include_flush:
-                    # No volume → no flush
-                    method_data[f"{solvent}_Flush"].append(False)
+                self.g.move(z=self.Z_max, F=self.Fz)
+                self.g.move(self.vial_waste[0], self.vial_waste[1], F=self.Fxy)
+                self.g.move(z=self.Z_min, F=self.Fz)
+                self.g.move(A=0, F=self.Fa_push)
+                self.g.move(z=self.Z_max, F=self.Fz)
 
-    df = pd.DataFrame(method_data)
+    def fill_vial(self, x: float, y: float, volume: float, solvent_name: str):
+        if self.g is None:
+            return
+        slow_push = False
+        cb = self.solvent_slow_push_vars.get(solvent_name)
+        if cb is not None and cb.isChecked():
+            slow_push = True
 
-    # Ask user whether to save as Excel or CSV
-    filepath = filedialog.asksaveasfilename(
-        defaultextension=".xlsx",
-        filetypes=[("Excel files", "*.xlsx"), ("CSV files", "*.csv")]
-    )
-    if not filepath:
-        return
+        self.g.write("fill_vial")
+        self.g.absolute()
+        displacement, syringe_type = self.syringe(volume)
+        adjusted_x, adjusted_y = x, y
 
-    if filepath.endswith(".csv"):
-        df.to_csv(filepath, index=False)
-    else:
-        df.to_excel(filepath, index=False)
+        if syringe_type == 2:
+            adjusted_x += self.syringe2_offset_x
+            adjusted_y += self.syringe2_offset_y
+            self.g.move(B=self.Z_max, F=self.Fz)
+            self.g.move(adjusted_x, adjusted_y, F=self.Fxy)
+            if slow_push:
+                self.g.move(B=self.Z_slow, F=self.Fz)
+                self.g.move(C=0, F=self.Fa_push_slow)
+                print("slow push")
+            else:
+                self.g.move(B=self.Z_min, F=self.Fz)
+                self.g.move(C=0, F=self.Fa_push)
+            self.g.move(B=self.Z_max, F=self.Fz)
+        else:
+            self.g.move(z=self.Z_max, F=self.Fz)
+            self.g.move(adjusted_x, adjusted_y, F=self.Fxy)
+            if slow_push:
+                self.g.move(z=self.Z_slow, F=self.Fz)
+                self.g.move(A=0, F=self.Fa_push_slow)
+                print("slow push")
+            else:
+                self.g.move(z=self.Z_min, F=self.Fz)
+                self.g.move(A=0, F=self.Fa_push)
+            self.g.move(z=self.Z_max, F=self.Fz)
 
-    messagebox.showinfo("Save Successful", f"Method saved successfully to {filepath}")
-        
-def load_from_excel():
-    filepath = filedialog.askopenfilename(filetypes=[("Excel/CSV files", "*.xlsx *.csv")])
-    if not filepath:
-        return
-    
-    # Load table
-    if filepath.endswith(".csv"):
-        df = pd.read_csv(filepath)
-    else:
-        df = pd.read_excel(filepath)
+    def remove_from_vial(self, x: float, y: float, volume: float):
+        if self.g is None:
+            return
+        self.g.write("remove_from_vial")
+        self.g.absolute()
+        displacement, syringe_type = self.syringe(volume)
+        adjusted_x, adjusted_y = x, y
+        if syringe_type == 2:
+            adjusted_x += self.syringe2_offset_x
+            adjusted_y += self.syringe2_offset_y
+            self.g.move(B=self.Z_max, F=self.Fz)
+            self.g.move(adjusted_x, adjusted_y, F=self.Fxy)
+            self.g.move(B=self.Z_min, F=self.Fz)
+            self.g.relative()
+            self.g.move(C=displacement, F=self.Fa_pull)
+            self.g.absolute()
+            self.g.move(B=self.Z_max, F=self.Fz)
+        else:
+            self.g.move(z=self.Z_max, F=self.Fz)
+            self.g.move(adjusted_x, adjusted_y, F=self.Fxy)
+            self.g.move(z=self.Z_min, F=self.Fz)
+            self.g.relative()
+            self.g.move(A=displacement, F=self.Fa_pull)
+            self.g.absolute()
+            self.g.move(z=self.Z_max, F=self.Fz)
 
-    include_flush = messagebox.askyesno("Import Options", "Do you want to import flush information if available?")
-    
-    # --- Detect solvents automatically ---
-    solvent_names = []
-    for col in df.columns:
-        if col.startswith("Solvent_") and not col.endswith("_Flush"):
-            solvent_names.append(col)
+    def home(self):
+        if self.g is None:
+            return
+        self.g.absolute()
+        self.g.move(z=self.Z_max, B=self.Z_max, F=self.Fz)
+        self.g.move(self.Rest_x, self.Rest_y, F=self.Fxy)
+        self.g.move(z=self.Z_min, B=self.Z_min, F=self.Fz)
+        self.g.write("M84")
 
-    if not solvent_names:
-        messagebox.showerror("Error", "No solvent columns found (expected columns like 'Solvent_1').")
-        return
+    def process_vial(self, volume: float, flush_required: bool,
+                     solvent_name: str, vial_index: int):
+        if self.g is None:
+            return
+        if flush_required:
+            self.flush(volume, solvent_name=solvent_name)
+        print(f"Picking up {volume} µL of {solvent_name}")
+        solvent_pos = self.solvent_positions[solvent_name]
+        self.remove_from_vial(solvent_pos[0], solvent_pos[1], volume)
+        pos = self.vial_position(vial_index - 1)
+        if pos is None:
+            return
+        x, y = pos
+        self.fill_vial(x, y, volume, solvent_name)
 
-    # Update global solvents list
-    global solvents
-    solvents = solvent_names  
+    # --------- GUI building: headers / vials ----------
+    def setup_solvent_headers(self):
+        if self.headers_layout is None:
+            return
 
-    # Reset solvent_slow_push_vars, since headers are regenerated
-    solvent_slow_push_vars.clear()
-    for widget in headers_frame.winfo_children():
-        widget.destroy()
-    setup_solvent_headers()
+        # Clear existing widgets
+        while self.headers_layout.count():
+            item = self.headers_layout.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
 
-    # Clear existing vials
-    global vial_entries
-    for vial_group in vial_entries:
-        vial_group[0].destroy()
-    vial_entries.clear()
+        self.solvent_slow_push_vars.clear()
 
-    # --- Populate vial_entries dynamically ---
-    for _, row in df.iterrows():
-        frame = ttk.Frame(inputs_frame, relief='groove', borderwidth=2)
-        frame.pack(fill='x', padx=5, pady=5, expand=True)
-        vial_number = len(vial_entries) + 1
-        ttk.Label(frame, text=f"Vial {str(vial_number).zfill(2)}:").pack(side='left', padx=(5, 20))
-        
+        lbl_pos = QLabel("Position")
+        lbl_pos.setMinimumWidth(80)
+        self.headers_layout.addWidget(lbl_pos)
+
+        for solvent in self.solvents:
+            w = QWidget()
+            hl = QHBoxLayout(w)
+            hl.setContentsMargins(5, 0, 5, 0)
+
+            lbl = QLabel(solvent)
+            slow_cb = QCheckBox("Slow")
+
+            hl.addWidget(lbl)
+            hl.addWidget(slow_cb)
+
+            self.headers_layout.addWidget(w)
+            self.solvent_slow_push_vars[solvent] = slow_cb
+
+        self.headers_layout.addStretch(1)
+
+    def add_vial(self):
+        if self.inputs_layout is None:
+            return
+
+        frame = QFrame()
+        frame.setFrameShape(QFrame.StyledPanel)
+        h = QHBoxLayout(frame)
+        h.setContentsMargins(5, 5, 5, 5)
+
+        vial_number = len(self.vial_entries) + 1
+        lbl = QLabel(f"Vial {str(vial_number).zfill(2)}:")
+        lbl.setMinimumWidth(80)
+        h.addWidget(lbl)
+
         vial_entry_group = [frame]
-        for solvent in solvents:
-            entry_frame = ttk.Frame(frame)
-            entry_frame.pack(side='left', padx=(5, 5))
-            
-            # Volume entry
-            entry = ttk.Entry(entry_frame, width=10)
-            entry_value = row.get(solvent, "")
-            entry.insert(0, str(entry_value) if pd.notna(entry_value) else "")
-            entry.pack(side='left')
-            
-            # Flush flag (only if requested and column exists)
-            flush_flag = False
-            if include_flush and f"{solvent}_Flush" in df.columns:
-                flush_flag = bool(row.get(f"{solvent}_Flush", False)) if pd.notna(row.get(f"{solvent}_Flush", False)) else False
-            
-            flush_cb_var = tk.BooleanVar(value=flush_flag)
-            flush_cb = ttk.Checkbutton(entry_frame, text='Flush', variable=flush_cb_var)
-            flush_cb.pack(side='left')
-            
-            vial_entry_group.append((entry, flush_cb_var))
-        
-        vial_entries.append(vial_entry_group)
 
-    update_vials_count_label()
-    messagebox.showinfo("Import Successful", f"Loaded method with {len(solvents)} solvent(s) from {filepath}")
-    
-# Tkinter setup
-root = tk.Tk()
-root.title("Liquid Handling System")
-root.geometry("620x480")
-solvents = [f'Solvent_{i+1}' for i in range(solvent_number)]
+        for solvent in self.solvents:
+            container = QWidget()
+            ch = QHBoxLayout(container)
+            ch.setContentsMargins(0, 0, 0, 0)
 
-main_frame = ttk.Frame(root)
-main_frame.pack(padx=10, pady=10, fill='both', expand=True)
+            entry = QLineEdit()
+            entry.setFixedWidth(70)
+            flush_cb = QCheckBox("Flush")
 
-top_frame = ttk.Frame(main_frame)
-top_frame.pack(fill='x')
+            ch.addWidget(entry)
+            ch.addWidget(flush_cb)
+            h.addWidget(container)
 
-mode_selection_frame = ttk.Frame(main_frame)
-mode_selection_frame.pack(fill='x', pady=5)
+            vial_entry_group.append((entry, flush_cb))
 
-fill_vial_mode_var = tk.BooleanVar(value=True)  # Default to fill one vial after another
-fill_solvent_mode_var = tk.BooleanVar(value=False)
+        self.vial_entries.append(vial_entry_group)
+        self.inputs_layout.addWidget(frame)
+        self.update_vials_count_label()
 
-headers_frame = ttk.Frame(main_frame)
-headers_frame.pack(fill='x', padx=5)
+    def remove_vial(self):
+        if not self.vial_entries:
+            return
+        frame = self.vial_entries.pop()[0]
+        frame.setParent(None)
+        frame.deleteLater()
+        self.update_vials_count_label()
+
+    def on_mode_checkbox_changed(self, changed: QCheckBox):
+        if changed is self.chk_mode_vial:
+            if self.chk_mode_vial.isChecked():
+                self.chk_mode_solvent.setChecked(False)
+            elif not self.chk_mode_solvent.isChecked():
+                self.chk_mode_solvent.setChecked(True)
+        elif changed is self.chk_mode_solvent:
+            if self.chk_mode_solvent.isChecked():
+                self.chk_mode_vial.setChecked(False)
+            elif not self.chk_mode_vial.isChecked():
+                self.chk_mode_vial.setChecked(True)
+
+    # --------- Save / load methods ----------
+    def on_save_method(self):
+        if not self.vial_entries:
+            QMessageBox.warning(self, "No data", "There are no vials to save.")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Export Options",
+            "Do you want to export flush information as well?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        include_flush = reply == QMessageBox.Yes
+
+        data = {"Vial": []}
+        for solvent in self.solvents:
+            data[solvent] = []
+            if include_flush:
+                data[f"{solvent}_Flush"] = []
+
+        for vial_index, vial_group in enumerate(self.vial_entries, start=1):
+            data["Vial"].append(vial_index)
+            for i, solvent in enumerate(self.solvents):
+                entry, flush_cb = vial_group[1:][i]
+                volume_value = entry.text().strip()
+                if volume_value:
+                    data[solvent].append(volume_value)
+                    if include_flush:
+                        data[f"{solvent}_Flush"].append(flush_cb.isChecked())
+                else:
+                    data[solvent].append("")
+                    if include_flush:
+                        data[f"{solvent}_Flush"].append(False)
+
+        df = pd.DataFrame(data)
+
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save method",
+            "",
+            "Excel files (*.xlsx);;CSV files (*.csv)",
+        )
+        if not path:
+            return
+
+        if path.lower().endswith(".csv"):
+            df.to_csv(path, index=False)
+        else:
+            if not path.lower().endswith(".xlsx"):
+                path += ".xlsx"
+            df.to_excel(path, index=False)
+
+        QMessageBox.information(self, "Save Successful", f"Method saved to:\n{path}")
+
+    def on_load_method(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Open method",
+            "",
+            "Excel/CSV files (*.xlsx *.csv)",
+        )
+        if not path:
+            return
+
+        if path.lower().endswith(".csv"):
+            df = pd.read_csv(path)
+        else:
+            df = pd.read_excel(path)
+
+        reply = QMessageBox.question(
+            self,
+            "Import Options",
+            "Do you want to import flush information if available?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+        include_flush = reply == QMessageBox.Yes
+
+        solvent_names: list[str] = []
+        for col in df.columns:
+            if col.startswith("Solvent_") and not col.endswith("_Flush"):
+                solvent_names.append(col)
+
+        if not solvent_names:
+            QMessageBox.critical(
+                self,
+                "Error",
+                "No solvent columns found (expected columns like 'Solvent_1').",
+            )
+            return
+
+        # update solvents + headers
+        self.solvents = solvent_names
+        self.setup_solvent_headers()
+
+        # clear existing vials
+        for group in self.vial_entries:
+            frame = group[0]
+            frame.setParent(None)
+            frame.deleteLater()
+        self.vial_entries.clear()
+
+        # populate from df
+        for _, row in df.iterrows():
+            frame = QFrame()
+            frame.setFrameShape(QFrame.StyledPanel)
+            h = QHBoxLayout(frame)
+            h.setContentsMargins(5, 5, 5, 5)
+
+            vial_number = len(self.vial_entries) + 1
+            lbl = QLabel(f"Vial {str(vial_number).zfill(2)}:")
+            lbl.setMinimumWidth(80)
+            h.addWidget(lbl)
+
+            vial_entry_group = [frame]
+
+            for solvent in self.solvents:
+                container = QWidget()
+                ch = QHBoxLayout(container)
+                ch.setContentsMargins(0, 0, 0, 0)
+
+                entry = QLineEdit()
+                entry_value = row.get(solvent, "")
+                if pd.notna(entry_value):
+                    entry.setText(str(entry_value))
+
+                flush_flag = False
+                if include_flush and f"{solvent}_Flush" in df.columns:
+                    raw = row.get(f"{solvent}_Flush", False)
+                    if pd.notna(raw):
+                        flush_flag = bool(raw)
+
+                flush_cb = QCheckBox("Flush")
+                flush_cb.setChecked(flush_flag)
+
+                ch.addWidget(entry)
+                ch.addWidget(flush_cb)
+                h.addWidget(container)
+
+                vial_entry_group.append((entry, flush_cb))
+
+            self.vial_entries.append(vial_entry_group)
+            if self.inputs_layout is not None:
+                self.inputs_layout.addWidget(frame)
+
+        self.update_vials_count_label()
+        QMessageBox.information(
+            self,
+            "Import Successful",
+            f"Loaded method with {len(self.solvents)} solvent(s) from:\n{path}",
+        )
+
+    # --------- G-code generation ----------
+    def on_generate_gcode(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save G-code",
+            "",
+            "G-code files (*.gcode)",
+        )
+        if not path:
+            QMessageBox.warning(
+                self, "File Not Saved",
+                "No file selected. G-code generation canceled."
+            )
+            return
+
+        if not path.lower().endswith(".gcode"):
+            path += ".gcode"
+
+        try:
+            self.g = G(outfile=path)
+            self.g.write("G21")
+            self.g.write("G28 Z B")
+            self.g.write("G28 Y X A C")
+
+            if self.chk_mode_vial.isChecked():
+                # vial after vial
+                for vial_index, entries in enumerate(self.vial_entries, start=1):
+                    for solvent_index, (entry, flush_cb) in enumerate(entries[1:]):
+                        text = entry.text().strip()
+                        if not text:
+                            continue
+                        try:
+                            vol = float(text)
+                        except ValueError:
+                            QMessageBox.warning(
+                                self,
+                                "Invalid volume",
+                                f"Invalid volume '{text}' in Vial {vial_index}, "
+                                f"{self.solvents[solvent_index]}. Skipping.",
+                            )
+                            continue
+                        flush_required = flush_cb.isChecked()
+                        solvent_name = self.solvents[solvent_index]
+                        self.process_vial(vol, flush_required, solvent_name, vial_index)
+
+            elif self.chk_mode_solvent.isChecked():
+                # solvent after solvent
+                for solvent_index, solvent_name in enumerate(self.solvents):
+                    for vial_index, entries in enumerate(self.vial_entries, start=1):
+                        entry, flush_cb = entries[1:][solvent_index]
+                        text = entry.text().strip()
+                        if not text:
+                            continue
+                        try:
+                            vol = float(text)
+                        except ValueError:
+                            QMessageBox.warning(
+                                self,
+                                "Invalid volume",
+                                f"Invalid volume '{text}' in Vial {vial_index}, "
+                                f"{solvent_name}. Skipping.",
+                            )
+                            continue
+                        flush_required = flush_cb.isChecked()
+                        self.process_vial(vol, flush_required, solvent_name, vial_index)
+
+            self.home()
+            self.g = None
+
+            QMessageBox.information(
+                self,
+                "G-Code Generation Complete",
+                "The G-code generation process has finished.\n"
+                "Please restart the program for the next file generation.",
+            )
+            self.close()
+
+        except Exception as e:
+            QMessageBox.critical(self, "G-code Error", str(e))
+            self.g = None
 
 
-#Scrollable Input Frame
-def setup_scrollable_inputs():
-    canvas = tk.Canvas(main_frame, borderwidth=0)
-    scrollbar = ttk.Scrollbar(main_frame, orient="vertical", command=canvas.yview)
-    scrollable_frame = ttk.Frame(canvas)
+def main():
+    app = QApplication(sys.argv)
+    w = LiquidHandlingWindow()
+    w.show()
+    sys.exit(app.exec())
 
-    # Configure the canvas
-    canvas.configure(yscrollcommand=scrollbar.set)
-    canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
 
-    # Pack scrollbar and canvas
-    scrollbar.pack(side="right", fill="y")
-    canvas.pack(side="left", fill="both", expand=True)
-
-    # Add the frame to the canvas
-    canvas.create_window((0, 0), window=scrollable_frame, anchor='nw')
-
-    # Function to update the scrollregion when new frames are added
-    def on_frame_configure(event):
-        canvas.configure(scrollregion=canvas.bbox("all"))
-
-    scrollable_frame.bind('<Configure>', on_frame_configure)
-    return scrollable_frame
-
-inputs_frame = setup_scrollable_inputs()
-
-actions_frame = ttk.Frame(main_frame)
-actions_frame.pack(fill='x')
-
-solvent_slow_push_vars = {}
-setup_solvent_headers()
-vial_entries = []
-
-# BUTTONS
-add_vial_button = ttk.Button(mode_selection_frame, text="Add Vial", command=add_vial)
-add_vial_button.pack(side='left')
-
-remove_vial_button = ttk.Button(mode_selection_frame, text="Remove Vial", command=remove_vial)
-remove_vial_button.pack(side='left')
-
-save_button = ttk.Button(top_frame, text="Export Excel", command=save_method)
-save_button.pack(side='left')
-
-import_excel_button = ttk.Button(top_frame, text="Import Excel/CSV", command=load_from_excel)
-import_excel_button.pack(side='left')
-
-generate_button = ttk.Button(mode_selection_frame, text="Generate G-Code", command=generate_g_code)
-generate_button.pack(side='right')
-
-ttk.Checkbutton(mode_selection_frame, text="Vial after Vial", variable=fill_vial_mode_var,
-                command=lambda: enforce_checkbox_exclusivity(fill_vial_mode_var)).pack(side='left', padx=10)
-ttk.Checkbutton(mode_selection_frame, text="Solvent after Solvent", variable=fill_solvent_mode_var,
-                command=lambda: enforce_checkbox_exclusivity(fill_solvent_mode_var)).pack(side='left', padx=10)
-
-vials_count_label = ttk.Label(mode_selection_frame, text="Vials: 0")
-vials_count_label.pack()
-
-# This loop adds 10 vials
-for _ in range(10):
-    add_vial()
-
-root.mainloop()
+if __name__ == "__main__":
+    main()

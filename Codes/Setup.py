@@ -6,6 +6,7 @@ from Syringe import Syringe
 from SyringeSolventLink import SyringeSolventLink
 from Rack import Rack
 from Machine import Machine
+from sqlmodel import SQLModel, create_engine
 
 #TODO create a class Integrated_Syringe to additionally account for the min_volume, syringe offset etc
 class Setup(BaseModel):
@@ -51,3 +52,11 @@ class Setup(BaseModel):
             if p.syringe_type.name == syringe_name and p.solvent_type.name == solvent_name:
                 return p
         return None
+
+if __name__ == "__main__":
+    engine = create_engine("sqlite:///liquid_handling.db", echo=False)
+    SQLModel.metadata.create_all(engine)
+    s = Syringe.get_by_id(1)
+    if s:
+        print(s.name, s.theoretical_correlation_factor)
+    engine.dispose()

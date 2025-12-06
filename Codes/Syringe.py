@@ -1,8 +1,10 @@
 from typing import Optional
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, Session, create_engine
 from sqlalchemy import UniqueConstraint
 from pydantic import PositiveFloat, computed_field
 import numpy as np
+
+from db import create_db_and_tables
 
 
 class Syringe(SQLModel, table=True):
@@ -28,6 +30,18 @@ class Syringe(SQLModel, table=True):
         r = float(self.inner_diameter_mm) / 2.0
         return 1.0 / (np.pi * r ** 2)
 
+    @classmethod
+    def get_by_id(cls, syringe_id: int) -> "Syringe | None":
+        # Local import avoids circular imports at module import time
+        from .db import get_session
+
+        with get_session() as session:
+            return session.get(cls, syringe_id)
+
 
 if __name__ == "__main__":
-    pass
+    create_db_and_tables()
+    s = Syringe.get_by_id(1)
+    if s:
+        print(s.name, s.theoretical_correlation_factor)
+

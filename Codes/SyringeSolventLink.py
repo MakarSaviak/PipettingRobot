@@ -6,6 +6,7 @@ from pydantic import PositiveFloat
 
 from Syringe import Syringe
 from Solvent import Solvent
+from db import create_db_and_tables
 
 class SyringeSolventLink(SQLModel, table=True):
     # composite PK prevents duplicate pairs (no second link for same person+tool)
@@ -30,33 +31,38 @@ class SyringeSolventLink(SQLModel, table=True):
 
 
 if __name__ == "__main__":
-    engine = create_engine("sqlite:///liquid_handling.db", echo=False)
-    SQLModel.metadata.create_all(engine)
-    with Session(engine) as s:
-        obj1 = Syringe(
-            nominal_volume_ul=1000,
-            name="Hamilton1001",
-            inner_diameter_mm=4.61
-        )
-        print(f"{obj1.theoretical_correlation_factor:.6f}")
-        obj2 = Solvent(
-            name="Water",
-            density_g_per_ml="0.99777",
-            notes="Distilled"
-        )
+    create_db_and_tables()
+    s = Syringe.get_by_id(1)
+    if s:
+        print(s.name, s.theoretical_correlation_factor)
 
-        for obj in [obj1, obj2]:
-            try:
-                s.add(obj)
-                s.commit()
-                s.refresh(obj)
-            except Exception as e:
-                s.rollback()
-                print("Insert failed:", e)
-
-        print(obj1)
-        # make the link row (with metadata)
-        link = SyringeSolventLink(syringe=obj1, solvent=obj2,
-                                  calibrated=False)
-        s.add(link)
-        s.commit()
+    # engine = create_engine("sqlite:///liquid_handling.db", echo=False)
+    # SQLModel.metadata.create_all(engine)
+    # with Session(engine) as s:
+    #     obj1 = Syringe(
+    #         nominal_volume_ul=1000,
+    #         name="Hamilton1001",
+    #         inner_diameter_mm=4.61
+    #     )
+    #     print(f"{obj1.theoretical_correlation_factor:.6f}")
+    #     obj2 = Solvent(
+    #         name="Water",
+    #         density_g_per_ml="0.99777",
+    #         notes="Distilled"
+    #     )
+    #
+    #     for obj in [obj1, obj2]:
+    #         try:
+    #             s.add(obj)
+    #             s.commit()
+    #             s.refresh(obj)
+    #         except Exception as e:
+    #             s.rollback()
+    #             print("Insert failed:", e)
+    #
+    #     print(obj1)
+    #     # make the link row (with metadata)
+    #     link = SyringeSolventLink(syringe=obj1, solvent=obj2,
+    #                               calibrated=False)
+    #     s.add(link)
+    #     s.commit()

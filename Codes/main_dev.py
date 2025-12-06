@@ -36,8 +36,8 @@ class LiquidHandlingWindow(QMainWindow):
         try:
             self.factor_1 = self.config.getfloat("Syringe_1", "theoretical_factor")
             self.backlash_1 = self.config.getfloat("Syringe_1", "backlash_correction")
-            self.vol_max_1 = self.config.getint("Syringe_1", "max_volume")
-            self.vol_min_1 = self.config.getint("Syringe_1", "min_volume")
+            self.max_vol_1 = self.config.getint("Syringe_1", "max_volume")
+            self.min_vol_1 = self.config.getint("Syringe_1", "min_volume")
         except Exception as e:
             self._fatal(f"Syringe_1 settings missing/invalid:\n{e!s}")
 
@@ -45,8 +45,8 @@ class LiquidHandlingWindow(QMainWindow):
         try:
             self.factor_2 = self.config.getfloat("Syringe_2", "theoretical_factor")
             self.backlash_2 = self.config.getfloat("Syringe_2", "backlash_correction")
-            self.vol_max_2 = self.config.getint("Syringe_2", "max_volume")
-            self.vol_min_2 = self.config.getint("Syringe_2", "min_volume")
+            self.max_vol_2 = self.config.getint("Syringe_2", "max_volume")
+            self.min_vol_2 = self.config.getint("Syringe_2", "min_volume")
             self.syringe2_offset_x = self.config.getfloat("Syringe_2", "syringe2_offset_x")
             self.syringe2_offset_y = self.config.getfloat("Syringe_2", "syringe2_offset_y")
         except Exception as e:
@@ -196,10 +196,10 @@ class LiquidHandlingWindow(QMainWindow):
 
     # --------- syringe / moves ----------
     def syringe(self, volume: float) -> tuple[float, int]:
-        if self.vol_min_1 <= volume <= self.vol_max_1:
+        if self.min_vol_1 <= volume <= self.max_vol_1:
             syringe_type = 1
             return (volume * self.factor_1) + self.backlash_1, syringe_type
-        elif self.vol_min_2 <= volume < self.vol_max_2:
+        elif self.min_vol_2 <= volume < self.max_vol_2:
             syringe_type = 2
             return (volume * self.factor_2) + self.backlash_2, syringe_type
         else:
@@ -207,7 +207,7 @@ class LiquidHandlingWindow(QMainWindow):
                 self,
                 "Volume error",
                 f"Volume out of range; please enter a volume between "
-                f"{self.vol_min_1} and {self.vol_max_2} µL."
+                f"{self.min_vol_1} and {self.max_vol_2} µL."
             )
             raise ValueError("Volume out of range")
 

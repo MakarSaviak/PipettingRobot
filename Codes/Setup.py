@@ -1,11 +1,11 @@
 from pydantic import BaseModel, Field, PositiveFloat, model_validator, ConfigDict
 from typing import Optional, Callable, List
 from SyringeSolventLink import SyringeSolventLink
-import Solvent
-import Syringe
-import SyringeSolventLink
-import Rack
-import Machine
+from Solvent import Solvent
+from Syringe import Syringe
+from SyringeSolventLink import SyringeSolventLink
+from Rack import Rack
+from Machine import Machine
 
 #TODO create a class Integrated_Syringe to additionally account for the min_volume, syringe offset etc
 class Setup(BaseModel):
@@ -13,6 +13,8 @@ class Setup(BaseModel):
     syringes: List[Syringe] = Field(default_factory=list)
     solvents: List[Solvent] = Field(default_factory=list)
     syringe_solvents: List[SyringeSolventLink] = Field(default_factory=list)
+    racks: List[Rack] = Field(default_factory=list)
+    machines: List[Machine] = Field(default_factory=list)
 
     # Keep the model consistent even when attributes are modified later
     model_config = ConfigDict(validate_assignment=True)

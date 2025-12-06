@@ -7,7 +7,7 @@ class Machine(BaseModel):
     z_min_limit: float = Field(..., description="Lowest allowed Z (mm) for this machine instance")
     z_max_limit: float = Field(..., description="Highest allowed Z (mm) for this machine instance")
 
-    Z_min: float # 35
+    Z_min: float # 25
     Z_max: float # 75
     Z_slow: float # 45
     Fz: PositiveInt

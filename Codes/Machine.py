@@ -1,7 +1,6 @@
 from pydantic import BaseModel, Field, PositiveFloat, model_validator, PositiveInt, ConfigDict
 from typing import Optional, Callable
 
-#TODO change all the god damn z_min and z_max to the proper values IN THE LIQUID HANDLING CODE
 class Machine(BaseModel):
     # Per-instance hard limits
     z_min_limit: float = Field(..., description="Lowest allowed Z (mm) for this machine instance")
@@ -10,11 +9,11 @@ class Machine(BaseModel):
     Z_min: float # 25
     Z_max: float # 75
     Z_slow: float # 45
-    Fz: PositiveInt
-    Fxy: PositiveInt
-    Fa_push: PositiveInt
-    Fa_push_slow: PositiveInt
-    Fa_pull: PositiveInt
+    Fz: PositiveFloat
+    Fxy: PositiveFloat
+    Fa_push: PositiveFloat
+    Fa_push_slow: PositiveFloat
+    Fa_pull: PositiveFloat
     Rest_x: PositiveFloat
     Rest_y: PositiveFloat
 
@@ -34,3 +33,22 @@ class Machine(BaseModel):
         if not (self.Z_min <= self.Z_slow <= self.Z_max):
             raise ValueError("Z_slow must be between Z_min and Z_max")
         return self
+
+
+if __name__ == "__main__":
+    # python -m Codes.Machine
+    machine = Machine(
+                      z_min_limit=20,
+                      z_max_limit=80,
+                      Z_min=25,
+                      Z_max=75,
+                      Z_slow=35,
+                      Fz=2000,
+                      Fxy=7000,
+                      Fa_push=800,
+                      Fa_push_slow=240,
+                      Fa_pull=300,
+                      Rest_x=5,
+                      Rest_y=5
+                      )
+    print(machine)

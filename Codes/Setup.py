@@ -1,14 +1,15 @@
-from pydantic import BaseModel, Field, PositiveFloat, model_validator, ConfigDict
-from typing import Optional, Callable, List
-from SyringeSolventLink import SyringeSolventLink
-from Solvent import Solvent
-from Syringe import Syringe
-from SyringeSolventLink import SyringeSolventLink
-from Rack import Rack
-from Machine import Machine
+from pydantic import BaseModel, Field, PositiveFloat, model_validator, ConfigDict, computed_field
 from sqlmodel import SQLModel, create_engine
+from typing import Optional, Callable, List
 
-#TODO create a class Integrated_Syringe to additionally account for the min_volume, syringe offset etc
+from .Solvent import Solvent
+from .Syringe import Syringe
+from .SyringeSolventLink import SyringeSolventLink
+from .Rack import Rack
+from .Machine import Machine
+from .IntegratedSyringe import IntegratedSyringe
+
+
 class Setup(BaseModel):
     name: str
     syringes: List[Syringe] = Field(default_factory=list)
@@ -46,10 +47,18 @@ class Setup(BaseModel):
             raise ValueError("Duplicate syringe–solvent pairs in setup.")
         return self
 
+    @computed_field
+    @property
+    def integrated_syringes(self) -> List[IntegratedSyringe]:
+        return [IntegratedSyringe(syringe=s) for s in self.syringes]
+
     # Convenience lookup
-    def get_syringe_solvent(self, syringe_name: str, solvent_name: str) -> Optional[SyringeSolvent]:
+    def get_syringe_solvent(self, syringe_name: str, solvent_name: str) -> Optional[SyringeSolventLink]:
         for p in self.syringe_solvents:
             if p.syringe_type.name == syringe_name and p.solvent_type.name == solvent_name:
                 return p
         return None
 
+if __name__ == "__main__":
+    s = Setup(name="Test")
+    print(s)

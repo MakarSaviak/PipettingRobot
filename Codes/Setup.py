@@ -8,6 +8,7 @@ from .SyringeSolventLink import SyringeSolventLink
 from .Rack import Rack
 from .Machine import Machine
 from .IntegratedSyringe import IntegratedSyringe
+from .db import create_db_and_tables
 
 
 class Setup(BaseModel):
@@ -60,5 +61,45 @@ class Setup(BaseModel):
         return None
 
 if __name__ == "__main__":
-    s = Setup(name="Test")
-    print(s)
+    create_db_and_tables()
+
+    syringe1 = Syringe.get_by_id(1)
+    syringes = [syringe1]
+
+    solvents = [Solvent.get_by_id(n) for n in range(1,5)] #from 1 to 4
+
+    rack = Rack(name="test",
+                vial1_x=180,
+                vial1_y=0,
+                solvent1_x=235,
+                solvent1_y=7.5,
+                waste_x=235,
+                waste_y=110,
+                dy_s=15,
+                dx_s=15,
+                number_of_solvents=3,
+                increment_y=35,
+                vials_per_row=10,
+                columns=3)
+
+    machine = Machine(
+        z_min_limit=20,
+        z_max_limit=80,
+        Z_min=25,
+        Z_max=75,
+        Z_slow=35,
+        Fz=2000,
+        Fxy=7000,
+        Fa_push=800,
+        Fa_push_slow=240,
+        Fa_pull=300,
+        Rest_x=5,
+        Rest_y=5
+    )
+
+    setup = Setup(name="Test",
+                  syringes=syringes,
+                   solvents=solvents,
+                   racks=[rack],
+                   machines=[machine])
+    print(setup.syringe_solvents)

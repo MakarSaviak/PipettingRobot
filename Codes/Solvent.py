@@ -18,3 +18,12 @@ class Solvent(SQLModel, table=True):
     syringe_links: list['SyringeSolventLink'] = Relationship(
         back_populates="solvent"
     )
+
+    @classmethod
+    def get_by_id(cls, solvent_id: int) -> "Solvent | None":
+        # Local import avoids circular imports at module import time
+        from .db import get_session
+
+        with get_session() as session:
+            return session.get(cls, solvent_id)
+        

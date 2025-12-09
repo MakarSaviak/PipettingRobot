@@ -18,7 +18,3 @@ class Solvent(SQLModel, table=True):
     syringe_links: list['SyringeSolventLink'] = Relationship(
         back_populates="solvent"
     )
-
-
-if __name__ == "__main__":
-    pass

@@ -53,10 +53,3 @@ class Setup(BaseModel):
                 return p
         return None
 
-if __name__ == "__main__":
-    engine = create_engine("sqlite:///liquid_handling.db", echo=False)
-    SQLModel.metadata.create_all(engine)
-    s = Syringe.get_by_id(1)
-    if s:
-        print(s.name, s.theoretical_correlation_factor)
-    engine.dispose()

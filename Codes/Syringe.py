@@ -1,5 +1,5 @@
 from typing import Optional
-from sqlmodel import SQLModel, Field, Relationship, Session, create_engine
+from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import UniqueConstraint
 from pydantic import PositiveFloat, computed_field
 import numpy as np

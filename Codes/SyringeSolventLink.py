@@ -4,9 +4,9 @@ from sqlmodel import SQLModel, Field, Relationship, Session, create_engine
 from sqlalchemy import event
 from pydantic import PositiveFloat
 
-from Syringe import Syringe
-from Solvent import Solvent
-from db import create_db_and_tables
+from .Syringe import Syringe
+from .Solvent import Solvent
+from .db import create_db_and_tables
 
 class SyringeSolventLink(SQLModel, table=True):
     # composite PK prevents duplicate pairs (no second link for same person+tool)

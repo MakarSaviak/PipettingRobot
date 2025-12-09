@@ -4,8 +4,6 @@ from sqlalchemy import UniqueConstraint
 from pydantic import PositiveFloat, computed_field
 import numpy as np
 
-from db import create_db_and_tables
-
 
 class Syringe(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -37,11 +35,3 @@ class Syringe(SQLModel, table=True):
 
         with get_session() as session:
             return session.get(cls, syringe_id)
-
-
-if __name__ == "__main__":
-    create_db_and_tables()
-    s = Syringe.get_by_id(1)
-    if s:
-        print(s.name, s.theoretical_correlation_factor)
-

@@ -1,6 +1,11 @@
 from sqlmodel import SQLModel, create_engine, Session
+from pathlib import Path
 
-sqlite_url = "sqlite:///liquid_handling.db"
+BASE_DIR = Path(__file__).resolve().parent
+
+# DB file inside Codes:
+sqlite_path = BASE_DIR / "liquid_handling.db"
+sqlite_url = f"sqlite:///{sqlite_path}"
 engine = create_engine(sqlite_url, echo=False)
 
 def get_session() -> Session:

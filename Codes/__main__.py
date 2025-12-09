@@ -1,5 +1,6 @@
 from .db import create_db_and_tables
 from .Syringe import Syringe
+from .IntegratedSyringe import IntegratedSyringe
 
 
 def main():
@@ -10,6 +11,8 @@ def main():
     else:
         print("No syringe with id=1 in the database.")
 
+    s_i = IntegratedSyringe(syringe=s, min_volume=0)
+    print(s_i)
 
 if __name__ == "__main__":
     main()

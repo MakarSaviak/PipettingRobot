@@ -18,18 +18,21 @@ class Rack(BaseModel):
 
 if __name__ == "__main__":
     # python -m Codes.Rack
-    rack = Rack(name="test",
-                vial1_x=180,
-                vial1_y=0,
-                solvent1_x=235,
-                solvent1_y=7.5,
-                waste_x=235,
-                waste_y=110,
-                dy_s=15,
-                dx_s=15,
-                number_of_solvents=3,
-                increment_y=35,
-                vials_per_row=10,
-                columns=3)
+    rack_data = {
+        "name": "test",
+        "vial1_x": 180,
+        "vial1_y": 0,
+        "solvent1_x": 235,
+        "solvent1_y": 7.5,
+        "waste_x": 235,
+        "waste_y": 110,
+        "dy_s": 15,
+        "dx_s": 15,
+        "number_of_solvents": 3,
+        "increment_y": 35,
+        "vials_per_row": 10,
+        "columns": 3,
+    }
+    rack = Rack.model_validate(rack_data)
 
     print(rack)

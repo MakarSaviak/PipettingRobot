@@ -1,5 +1,4 @@
-from pydantic import BaseModel, Field, PositiveFloat, model_validator, PositiveInt, ConfigDict
-from typing import Optional, Callable
+from pydantic import BaseModel, Field, PositiveFloat, model_validator, ConfigDict
 
 class Machine(BaseModel):
     # Per-instance hard limits

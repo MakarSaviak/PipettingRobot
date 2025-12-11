@@ -1,8 +1,8 @@
 from datetime import date
-from typing import Optional
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import event
 from pydantic import PositiveFloat
+from datetime import datetime
 
 from .Syringe import Syringe
 from .Solvent import Solvent
@@ -15,8 +15,8 @@ class SyringeSolventLink(SQLModel, table=True):
     # optional metadata about the liquid handling
     calibrated: bool = False
     backlash_correction: PositiveFloat = Field(default=0.0)
-    real_correlation_factor: Optional[float] = Field(default=None)
-    since: Optional[date] = None
+    real_correlation_factor: float | None = Field(default=None)
+    since: datetime | None = None
 
     syringe: Syringe = Relationship(back_populates="solvent_links")
     solvent: Solvent = Relationship(back_populates="syringe_links")

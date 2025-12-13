@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, model_validator, ConfigDict, computed_field
+from pydantic import BaseModel, Field, model_validator, ConfigDict
 from sqlmodel import select
 from typing import List
 
@@ -16,7 +16,7 @@ class Setup(BaseModel):
     solvents: List[Solvent] = Field(default_factory=list)
     syringe_solvents: List[SyringeSolventLink] = Field(default_factory=list)
     racks: List[Rack] = Field(default_factory=list)
-    machines: List[Machine] = Field(default_factory=list)
+    machine: Machine | None = None
 
     # Keep the model consistent even when attributes are modified later
     model_config = ConfigDict(validate_assignment=True)
@@ -66,32 +66,16 @@ class Setup(BaseModel):
 
         return self
 
-    # Convenience lookup by syringe/solvent name
-    def get_syringe_solvent(
-        self,
-        syringe_name: str,
-        solvent_name: str,
-        ) -> SyringeSolventLink | None:
-        syringe = next((s for s in self.syringes if s.name == syringe_name), None)
-        solvent = next((s for s in self.solvents if s.name == solvent_name), None)
-        if syringe is None or solvent is None:
-            return None
-
-        for link in self.syringe_solvents:
-            if link.syringe_id == syringe.id and link.solvent_id == solvent.id:
-                return link
-        return None
-
-
+    def get_rack(self, name: str) -> Rack | None:
+        return next((r for r in self.racks if r.name == name), None)
 
 
 if __name__ == "__main__":
-    # create_db_and_tables()
-    #
-    # syringes = [Syringe.get_by_id(1)]
-    #
-    # solvents = Solvent.get_all()
-    # print(solvents)
+    create_db_and_tables()
+
+    syringes = [Syringe.get_by_id(1)]
+
+    solvents = Solvent.get_all()
 
     rack_data = {
         "name": "GC-10-by-3_Solvent-20ml-3-by-1",
@@ -133,8 +117,8 @@ if __name__ == "__main__":
         "syringes": syringes,
         "solvents": solvents,
         "racks": [rack],
-        "machines": [machine]
+        "machine": machine
     }
     setup = Setup.model_validate(setup_data)
 
-    print(setup.syringe_solvents)
+    print(setup)

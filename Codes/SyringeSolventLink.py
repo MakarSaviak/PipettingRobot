@@ -89,6 +89,10 @@ class SyringeSolventLink(SQLModel, table=True):
 
         return True
 
+    def get_link(self, syringe_id: int, solvent_id: int) -> "SyringeSolventLink | None":
+        return next(
+            (l for l in self.syringe_solvents if l.syringe_id == syringe_id and l.solvent_id == solvent_id), None)
+
     @classmethod
     def set_calibration(
             cls,

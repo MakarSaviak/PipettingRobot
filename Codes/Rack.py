@@ -1,4 +1,7 @@
 from pydantic import BaseModel, PositiveFloat, PositiveInt, NonNegativeFloat
+import numpy as np
+
+from .config_io import load_model
 
 #TODO create a function calculating positions of vials
 class Rack(BaseModel):
@@ -16,23 +19,27 @@ class Rack(BaseModel):
     vials_per_row: PositiveInt #I think they mean the number of rows
     columns: PositiveInt #The number of columns
 
+    @property
+    def vial_positions(self) -> list[tuple[float, float]]:
+        n_rows = self.vials_per_row
+        n_cols = self.columns
+        n = n_rows * n_cols
+
+        idx = np.arange(n, dtype=int)
+        col = idx // n_rows  # 0,0,...0, 1,1,...1, 2,2,...2
+        row = idx % n_rows  # 0..n_rows-1 repeating
+
+        x = self.vial1_x + col * self.dx_s
+        y = self.vial1_y + row * self.dy_s
+
+        # Nx2 array -> list[(x,y), ...]
+        return list(map(tuple, np.column_stack((x, y))))
+
+
 if __name__ == "__main__":
     # python -m Codes.Rack
-    rack_data = {
-        "name": "test",
-        "vial1_x": 180,
-        "vial1_y": 0,
-        "solvent1_x": 235,
-        "solvent1_y": 7.5,
-        "waste_x": 235,
-        "waste_y": 110,
-        "dy_s": 15,
-        "dx_s": 15,
-        "number_of_solvents": 3,
-        "increment_y": 35,
-        "vials_per_row": 10,
-        "columns": 3,
-    }
-    rack = Rack.model_validate(rack_data)
-
-    print(rack)
+    rack = load_model(Rack, "GC-10-by-3_Solvent-20ml-3-by-1")
+    positions = rack.vial_positions
+    for pos in positions:
+        print(pos)
+    print(len(positions))

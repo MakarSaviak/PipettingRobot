@@ -1,0 +1,15 @@
+{
+  "name": "GC-10-by-3_Solvent-20ml-3-by-1",
+  "vial1_x": 180.0,
+  "vial1_y": 0.0,
+  "solvent1_x": 235.0,
+  "solvent1_y": 7.5,
+  "waste_x": 235.0,
+  "waste_y": 110.0,
+  "dy_s": 15.0,
+  "dx_s": 15.0,
+  "number_of_solvents": 3,
+  "increment_y": 35.0,
+  "vials_per_row": 10,
+  "columns": 3
+}

@@ -10,7 +10,7 @@ from .Machine import Machine
 from .IntegratedSyringe import IntegratedSyringe
 from .db import create_db_and_tables, get_session
 
-#TODO create a dir with dirs of each class where u store different class configurations in json format.
+
 class Setup(BaseModel):
     name: str
     syringes: List[Syringe] = Field(default_factory=list)

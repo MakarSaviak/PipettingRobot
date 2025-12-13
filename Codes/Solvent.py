@@ -1,6 +1,8 @@
 from sqlmodel import SQLModel, Field, Relationship
 from pydantic import PositiveFloat, NonNegativeInt
 from sqlalchemy import UniqueConstraint, exc
+from sqlmodel import select
+from typing import cast
 
 from .db import get_session
 
@@ -81,3 +83,9 @@ class Solvent(SQLModel, table=True):
                 raise ValueError(f"Could not delete solvent id={solvent_id}.") from e
 
         return True
+
+    @classmethod
+    def get_all(cls) -> list["Solvent"]:
+        with get_session() as session:
+            rows = session.exec(select(cls)).all()
+            return cast(list["Solvent"], rows)

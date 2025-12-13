@@ -96,48 +96,49 @@ if __name__ == "__main__":
 
     syringes = [Syringe.get_by_id(1)]
 
-    solvents = [Solvent.get_by_id(n) for n in range(1,5)] #from 1 to 4
+    solvents = Solvent.get_all()
+    print(solvents)
 
-    rack_data = {
-        "name": "test",
-        "vial1_x": 180,
-        "vial1_y": 0,
-        "solvent1_x": 235,
-        "solvent1_y": 7.5,
-        "waste_x": 235,
-        "waste_y": 110,
-        "dy_s": 15,
-        "dx_s": 15,
-        "number_of_solvents": 3,
-        "increment_y": 35,
-        "vials_per_row": 10,
-        "columns": 3,
-    }
-    rack = Rack.model_validate(rack_data)
-
-    machine_data = {
-        "z_min_limit": 20,
-        "z_max_limit": 80,
-        "Z_min": 25,
-        "Z_max": 75,
-        "Z_slow": 35,
-        "Fz": 2000,
-        "Fxy": 7000,
-        "Fa_push": 800,
-        "Fa_push_slow": 240,
-        "Fa_pull": 300,
-        "Rest_x": 5,
-        "Rest_y": 5,
-    }
-    machine = Machine.model_validate(machine_data)
-
-    setup_data = {
-        "name": "Test",
-        "syringes": syringes,
-        "solvents": solvents,
-        "racks": [rack],
-        "machines": [machine]
-    }
-    setup = Setup.model_validate(setup_data)
-
-    print(setup.syringe_solvents)
+    # rack_data = {
+    #     "name": "test",
+    #     "vial1_x": 180,
+    #     "vial1_y": 0,
+    #     "solvent1_x": 235,
+    #     "solvent1_y": 7.5,
+    #     "waste_x": 235,
+    #     "waste_y": 110,
+    #     "dy_s": 15,
+    #     "dx_s": 15,
+    #     "number_of_solvents": 3,
+    #     "increment_y": 35,
+    #     "vials_per_row": 10,
+    #     "columns": 3,
+    # }
+    # rack = Rack.model_validate(rack_data)
+    #
+    # machine_data = {
+    #     "z_min_limit": 20,
+    #     "z_max_limit": 80,
+    #     "Z_min": 25,
+    #     "Z_max": 75,
+    #     "Z_slow": 35,
+    #     "Fz": 2000,
+    #     "Fxy": 7000,
+    #     "Fa_push": 800,
+    #     "Fa_push_slow": 240,
+    #     "Fa_pull": 300,
+    #     "Rest_x": 5,
+    #     "Rest_y": 5,
+    # }
+    # machine = Machine.model_validate(machine_data)
+    #
+    # setup_data = {
+    #     "name": "Test",
+    #     "syringes": syringes,
+    #     "solvents": solvents,
+    #     "racks": [rack],
+    #     "machines": [machine]
+    # }
+    # setup = Setup.model_validate(setup_data)
+    #
+    # print(setup.syringe_solvents)

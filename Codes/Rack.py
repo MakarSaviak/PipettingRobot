@@ -3,7 +3,7 @@ import numpy as np
 
 from .config_io import load_model
 
-#TODO create a function calculating positions of vials
+
 class Rack(BaseModel):
     name: str
     vial1_x: NonNegativeFloat

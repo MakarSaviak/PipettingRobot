@@ -7,7 +7,7 @@ class Machine(BaseModel):
 
     Z_min: float # 25
     Z_max: float # 75
-    Z_slow: float # 45
+    Z_slow: float # 35
     Fz: PositiveFloat
     Fxy: PositiveFloat
     Fa_push: PositiveFloat

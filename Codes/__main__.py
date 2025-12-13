@@ -1,18 +1,28 @@
 from .db import create_db_and_tables
 from .Syringe import Syringe
-from .IntegratedSyringe import IntegratedSyringe
+from .config_io import save_model, load_model, delete_model
+from .Rack import Rack
+from .Machine import Machine
 
 
-def main():
-    create_db_and_tables()
-    s = Syringe.get_by_id(1)
-    if s:
-        print(s.name, s.theoretical_correlation_factor)
-    else:
-        print("No syringe with id=1 in the database.")
+def main() -> None:
+    machine_data = {
+        "z_min_limit": 20,
+        "z_max_limit": 80,
+        "Z_min": 25,
+        "Z_max": 75,
+        "Z_slow": 35,
+        "Fz": 2000,
+        "Fxy": 7000,
+        "Fa_push": 800,
+        "Fa_push_slow": 240,
+        "Fa_pull": 300,
+        "Rest_x": 5,
+        "Rest_y": 5,
+    }
+    machine = Machine.model_validate(machine_data)
+    save_model(machine, "current")
 
-    s_i = IntegratedSyringe(syringe=s, min_volume=0)
-    print(s_i)
 
 if __name__ == "__main__":
     main()

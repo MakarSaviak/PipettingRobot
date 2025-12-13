@@ -1,6 +1,6 @@
 from pydantic import BaseModel, PositiveFloat, PositiveInt, NonNegativeFloat
 
-
+#TODO create a function calculating positions of vials
 class Rack(BaseModel):
     name: str
     vial1_x: NonNegativeFloat

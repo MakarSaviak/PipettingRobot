@@ -11,7 +11,7 @@ T = TypeVar("T", bound=BaseModel)
 BASE_DIR = Path(__file__).resolve().parent
 CONFIG_DIR = BASE_DIR / "config"
 
-def load_model(cls: Type[T], name: str) -> T:
+def load_model(cls: type[T], name: str) -> T:
     subdir = cls.__name__.lower() + "s"
     path = CONFIG_DIR / subdir / f"{name}.json"
     data = json.loads(path.read_text(encoding="utf-8"))
@@ -30,8 +30,8 @@ def save_model(model: BaseModel, name: str) -> Path:
     path.write_text(model.model_dump_json(indent=2), encoding="utf-8")
     return path
 
-def delete_model(model_cls: type[BaseModel], name: str) -> None:
-    subdir = model_cls.__name__.lower() + "s"
+def delete_model(cls: type[BaseModel], name: str) -> None:
+    subdir = cls.__name__.lower() + "s"
     path = CONFIG_DIR / subdir / f"{name}.json"
 
     if not path.is_file():

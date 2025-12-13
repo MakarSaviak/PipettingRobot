@@ -6,8 +6,10 @@ from .db import create_db_and_tables
 
 
 class IntegratedSyringe(BaseModel):
+    """
+    might be useful in the future
+    """
     syringe: Syringe           # the SQLModel instance
-    min_volume: float | None = None
     offset: float = Field(default=0.0)
 
     # optional: convenience properties that forward to Syringe

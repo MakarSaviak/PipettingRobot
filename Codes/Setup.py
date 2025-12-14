@@ -69,6 +69,10 @@ class Setup(BaseModel):
     def get_rack(self, name: str) -> Rack | None:
         return next((r for r in self.racks if r.name == name), None)
 
+    def get_link(self, syringe_id: int, solvent_id: int) -> "SyringeSolventLink | None":
+        return next(
+            (l for l in self.syringe_solvents if l.syringe_id == syringe_id and l.solvent_id == solvent_id), None)
+
 
 if __name__ == "__main__":
     create_db_and_tables()
@@ -121,4 +125,5 @@ if __name__ == "__main__":
     }
     setup = Setup.model_validate(setup_data)
 
-    print(setup)
+    link = setup.get_link(1, 7)
+    print(link)

@@ -1,40 +1,99 @@
+from pathlib import Path
+
 from .db import create_db_and_tables
+from .config_io import load_model
 from .Syringe import Syringe
 from .Solvent import Solvent
-from .SyringeSolventLink import SyringeSolventLink
+from .Setup import Setup
+from .Rack import Rack
+from .Machine import Machine
+from .PipetG import PipetG  # wherever you put it
+from .InputXlsx import InputXlsx
 
-
-def main() -> None:
+def main():
+    # assume you already created `setup` (loaded from json/db/etc.)
     create_db_and_tables()
 
-    syringe1 = Syringe.create(
-        name="Hamilton1001_1000uL",
-        nominal_volume_ul=1000,
-        inner_diameter_mm=4.61,
-    )
-    syringe_id = syringe1.id
-    print(f"Created syringe: id={syringe_id} | name={syringe1.name}")
+    syringes = [Syringe.get_by_id(1)]
+    solvents = Solvent.get_all()
 
-    solvent_list = [
-        {"name": "H2O", "density_g_per_ml": 0.998, "notes": "distilled"},
-        {"name": "Acetone", "density_g_per_ml": 0.785, "notes": "distilled"},
-        {"name": "Et2O", "density_g_per_ml": 0.71, "notes": "SPS"},
-        {"name": "ACN", "density_g_per_ml": 0.78, "notes": "SPS"},
-        {"name": "Hexane", "density_g_per_ml": 0.66, "notes": "SPS"},
-        {"name": "DCM", "density_g_per_ml": 1.326, "notes": "SPS"},
-    ]
+    rack1 = load_model(Rack, "GC-10-3_3-1")
+    rack2 = load_model(Rack, "counterion-96_EDIT-THIS")
+    racks = [rack1, rack2]
 
-    for sd in solvent_list:
-        sol = Solvent.create(**sd)
-        print(f"Created solvent: id={sol.id} | name={sol.name}")
+    machine = load_model(Machine, "current")
 
-        link = SyringeSolventLink.create(
-            syringe_id=syringe_id,
-            solvent_id=sol.id,
-            calibrated=False,
-        )
-        print(f"  Linked: ({link.syringe_id}, {link.solvent_id}) factor={link.real_correlation_factor}")
+    setup_data = {
+        "name": "Test",
+        "syringes": syringes,
+        "solvents": solvents,
+        "racks": racks,
+        "machine": machine
+    }
+    setup = Setup.model_validate(setup_data)
 
+    syringe_id = 1
+
+    # map solvent_idx -> solvent_id (DB id)
+    # this assumes setup.solvents order matches your solvent grid order
+    solvent_ids = [s.id for s in setup.solvents]
+    if any(x is None for x in solvent_ids):
+        raise ValueError("Some solvents in setup have id=None; cannot use solvent_id.")
+    solvent_ids = [int(x) for x in solvent_ids]
+
+    out = Path("G-codes/test_run.gcode")
+    out_excel = Path("csv/test_run.xlsx")
+    pg = PipetG(outfile=out, setup=setup, syringe_id=syringe_id)
+    excel = InputXlsx(pipet=pg)
+    excel.create_empty_table(out_excel)
+
+        # pg.home()
+        #
+        # # ---- prime/flush with solvent #0 into waste ----
+        # pg.flush(
+        #     volume_ul=200.0,
+        #     repeats=2,
+        #     solvent_idx=0,
+        #     solvent_id=solvent_ids[0],
+        # )
+        #
+        # # ---- fill first 5 vials with solvent #0 ----
+        # for vial_idx in range(0, 5):
+        #     pg.process_vial(
+        #         vial_idx=vial_idx,
+        #         solvent_idx=0,
+        #         solvent_id=solvent_ids[0],
+        #         volume_ul=100,
+        #         slow=False,
+        #         flush_repeats=0,
+        #     )
+        # vial_idx=5
+        # pg.process_vial(
+        #     vial_idx=vial_idx,
+        #     solvent_idx=1,
+        #     solvent_id=solvent_ids[1],
+        #     volume_ul=250,
+        #     slow=True,  # demo: slow dispense
+        #     flush_repeats=1,  # demo: flush once before dispensing
+        # )
+        # # ---- fill next 4 vials with solvent #2 ----
+        # pg.flush(
+        #     volume_ul=500.0,
+        #     repeats=2,
+        #     solvent_idx=2,
+        #     solvent_id=solvent_ids[2],
+        # )
+        # for vial_idx in range(6, 10):
+        #     pg.process_vial(
+        #         vial_idx=vial_idx,
+        #         solvent_idx=2,
+        #         solvent_id=solvent_ids[2],
+        #         volume_ul=500.0,
+        #         slow=True,
+        #         flush_repeats=0,
+        #     )
+        #
+        # pg.finish()
 
 if __name__ == "__main__":
     main()

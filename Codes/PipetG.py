@@ -215,10 +215,10 @@ class PipetG(BaseModel):
         if not (solvent_idx < len(pos)):
             raise IndexError(f"Solvent idx '{solvent_idx}' is out of bound {len(pos)-1}.")
 
-        g.write("flush")
         sx, sy = pos[solvent_idx]
 
         for _ in range(int(repeats)):
+            g.write("flush")
             self.remove_from_vial(sx, sy, volume_ul, solvent_id)
 
             wx, wy = self.waste_pos  # type: ignore[misc]

@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 from openpyxl import Workbook
 from openpyxl.styles import Border, Side
+from openpyxl.comments import Comment
 
 from .PipetG import PipetG
 
@@ -32,12 +33,15 @@ class InputXlsx(BaseModel):
         ws.sheet_view.showGridLines = True
 
         k = 1
-        # columnwise: A1..A(n), then B1..B(n), ...
         for c in range(1, n_cols + 1):
             for r in range(1, n_rows + 1):
                 cell = ws.cell(row=r, column=c)
-                cell.value = k
+                cell.value = None  # user types here
                 cell.border = _GRID_BORDER
+
+                cell.comment = Comment(str(k), "idx")  # “background index”
+                cell.comment.width = 60
+                cell.comment.height = 25
                 k += 1
 
     def create_empty_table(self, out_path: Path) -> Path:

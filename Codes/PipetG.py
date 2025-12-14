@@ -4,7 +4,6 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, PositiveInt, PositiveFloat, NonNegativeInt, NonNegativeFloat, ConfigDict, Field
-from pydantic.dataclasses import dataclass as pydantic_dataclass
 from mecode import G
 
 from .Setup import Setup
@@ -15,7 +14,6 @@ class PipetG(BaseModel):
     setup: Setup
     syringe_id: PositiveInt  # required
 
-    # runtime-only (underscore attrs are NOT pydantic fields in v2)
     g: G | None = Field(default=None, exclude=True)
     model_config = ConfigDict(arbitrary_types_allowed=True)
 

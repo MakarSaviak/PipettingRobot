@@ -3,6 +3,7 @@ from sqlmodel import select
 from typing import List
 from itertools import chain
 
+from Codes.config_io import load_model
 from .Solvent import Solvent
 from .Syringe import Syringe
 from .SyringeSolventLink import SyringeSolventLink
@@ -89,64 +90,13 @@ if __name__ == "__main__":
     create_db_and_tables()
 
     syringes = [Syringe.get_by_id(1)]
-
     solvents = Solvent.get_all()
 
-    rack_data1 = {
-        "name": "GC-10-by-3_Solvent-20ml-3-by-1",
-        "vial1_x": 180,
-        "vial1_y": 0,
-        "solvent1_x": 235,
-        "solvent1_y": 7.5,
-        "waste_x": 235,
-        "waste_y": 110,
-        "vial_dy": 15,
-        "vial_dx": 15,
-        "vial_rows": 10,
-        "vial_columns": 3,
-        "solvent_rows": 3,
-        "solvent_columns": 1,
-        "solvent_dy": 35,
-        "solvent_dx": None,
-    }
-    rack1 = Rack.model_validate(rack_data1)
-
-    rack_data2 = {
-        "name": "counterion-96",
-        "vial1_x": 0,
-        "vial1_y": 0,
-        "solvent1_x": 100,
-        "solvent1_y": 7.5,
-        "waste_x": 100,
-        "waste_y": 110,
-        "vial_dy": 10,
-        "vial_dx": 10,
-        "vial_rows": 6,
-        "vial_columns": 16,
-        "solvent_rows": 6,
-        "solvent_columns": 16,
-        "solvent_dy": 10,
-        "solvent_dx": 10
-    }
-    rack2 = Rack.model_validate(rack_data2)
-
+    rack1 = load_model(Rack, "GC-10-by-3_Solvent-20ml-3-by-1")
+    rack2 = load_model(Rack, "counterion-96_EDIT-THIS")
     racks = [rack1, rack2]
 
-    machine_data = {
-        "z_min_limit": 20,
-        "z_max_limit": 80,
-        "Z_min": 25,
-        "Z_max": 75,
-        "Z_slow": 35,
-        "Fz": 2000,
-        "Fxy": 7000,
-        "Fa_push": 800,
-        "Fa_push_slow": 240,
-        "Fa_pull": 300,
-        "Rest_x": 5,
-        "Rest_y": 5,
-    }
-    machine = Machine.model_validate(machine_data)
+    machine = load_model(Machine, "current")
 
     setup_data = {
         "name": "Test",
@@ -156,11 +106,3 @@ if __name__ == "__main__":
         "machine": machine
     }
     setup = Setup.model_validate(setup_data)
-
-    # link = setup.get_link(1, 1)
-    # cf = link.real_correlation_factor
-    # bc = link.backlash_correction
-    # print(cf, bc)
-    v = setup.solvent_positions
-    for i, p in enumerate(v):
-        print(i, p)

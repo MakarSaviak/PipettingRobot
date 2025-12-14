@@ -4,11 +4,12 @@ from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, PositiveInt, PositiveFloat, NonNegativeInt, NonNegativeFloat, ConfigDict, Field
+from pydantic.dataclasses import dataclass as pydantic_dataclass
 from mecode import G
 
 from .Setup import Setup
 
-#TODO rewrite all functions
+#TODO check for correctness
 class PipetG(BaseModel):
     outfile: Path
     setup: Setup

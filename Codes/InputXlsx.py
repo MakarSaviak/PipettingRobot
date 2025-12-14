@@ -15,12 +15,10 @@ _GRID_BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 
 class InputXlsx(BaseModel):
     pipet: PipetG
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     @staticmethod
     def _validate_sheet_name(name: str) -> None:
-        # Excel sheet name rules (most important ones)
         if not name:
             raise ValueError("Excel sheet name must not be empty.")
         if len(name) > 31:
@@ -30,15 +28,17 @@ class InputXlsx(BaseModel):
             raise ValueError(f"Excel sheet name contains forbidden characters: '{name}'")
 
     @staticmethod
-    def _make_blank_grid(ws, *, n_rows: int, n_cols: int) -> None:
-        # Show Excel UI gridlines too (optional), but borders are what makes a "drawn table"
+    def _make_numbered_grid(ws, *, n_rows: int, n_cols: int) -> None:
         ws.sheet_view.showGridLines = True
 
-        for r in range(1, n_rows + 1):
-            for c in range(1, n_cols + 1):
+        k = 1
+        # columnwise: A1..A(n), then B1..B(n), ...
+        for c in range(1, n_cols + 1):
+            for r in range(1, n_rows + 1):
                 cell = ws.cell(row=r, column=c)
-                cell.value = None
+                cell.value = k
                 cell.border = _GRID_BORDER
+                k += 1
 
     def create_empty_table(self, out_path: Path) -> Path:
         racks = self.pipet.setup.racks
@@ -49,10 +49,9 @@ class InputXlsx(BaseModel):
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
         wb = Workbook()
-        # remove default sheet
-        wb.remove(wb.active)
+        wb.remove(wb.active)  # remove default sheet
 
-        # pre-check for duplicate/invalid sheet names
+        # validate sheet names
         sheet_names: list[str] = []
         for r in racks:
             sheet_names.append(f"{r.name}_solvents")
@@ -64,17 +63,17 @@ class InputXlsx(BaseModel):
         for sname in sheet_names:
             self._validate_sheet_name(sname)
 
-        # create sheets
+        # create sheets + fill
         for rack in racks:
             ws_sol = wb.create_sheet(f"{rack.name}_solvents")
-            self._make_blank_grid(
+            self._make_numbered_grid(
                 ws_sol,
                 n_rows=int(rack.solvent_rows),
                 n_cols=int(rack.solvent_columns),
             )
 
             ws_vial = wb.create_sheet(f"{rack.name}_vials")
-            self._make_blank_grid(
+            self._make_numbered_grid(
                 ws_vial,
                 n_rows=int(rack.vial_rows),
                 n_cols=int(rack.vial_columns),

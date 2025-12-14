@@ -4,12 +4,7 @@ from __future__ import annotations
 import sys
 import configparser
 import pandas as pd
-import Solvent
-import Syringe
-import SyringeSolventLink
-import Rack
-import Machine
-import Setup
+
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (

@@ -18,7 +18,7 @@ def main():
     solvents = Solvent.get_all()
 
     rack1 = load_model(Rack, "GC-10-3_3-1")
-    rack2 = load_model(Rack, "counterion-96_EDIT-THIS")
+    rack2 = load_model(Rack, "counterion-96")
     racks = [rack1, rack2]
 
     machine = load_model(Machine, "current")

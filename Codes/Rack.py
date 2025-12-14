@@ -2,7 +2,7 @@ from pydantic import BaseModel, PositiveFloat, PositiveInt, NonNegativeFloat
 import numpy as np
 from typing import Literal
 
-from .config_io import load_model, save_model
+from .config_io import save_model
 
 
 class Rack(BaseModel):
@@ -58,12 +58,23 @@ class Rack(BaseModel):
 
 if __name__ == "__main__":
     # python -m Codes.Rack
-    rack = load_model(Rack, "GC-10-by-3_Solvent-20ml-3-by-1")
+    rack_data2 = {
+        "name": "counterion-96_EDIT-THIS",
+        "vial1_x": 0,
+        "vial1_y": 0,
+        "solvent1_x": 100,
+        "solvent1_y": 7.5,
+        "waste_x": 100,
+        "waste_y": 110,
+        "vial_dy": 10,
+        "vial_dx": 10,
+        "vial_rows": 6,
+        "vial_columns": 16,
+        "solvent_rows": 6,
+        "solvent_columns": 16,
+        "solvent_dy": 10,
+        "solvent_dx": 10
+    }
+    rack2 = Rack.model_validate(rack_data2)
 
-    vials = rack.positions_vial
-    solvents = rack.positions_solvent
-    for i, v in enumerate(vials):
-        print(i, v)
-    print(8*"=")
-    for i, s in enumerate(solvents):
-        print(i, s)
+    save_model(rack2, "counterion-96_EDIT-THIS")

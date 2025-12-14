@@ -3,12 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, PositiveInt, PositiveFloat
+from pydantic import BaseModel, PositiveInt, PositiveFloat, NonNegativeInt, NonNegativeFloat, ConfigDict, Field
 from mecode import G
 
 from .Setup import Setup
-from .Syringe import Syringe
-from .SyringeSolventLink import SyringeSolventLink
 
 #TODO rewrite all functions
 class PipetG(BaseModel):
@@ -17,59 +15,64 @@ class PipetG(BaseModel):
     syringe_id: PositiveInt  # required
 
     # runtime-only (underscore attrs are NOT pydantic fields in v2)
-    g: G | None = None
+    g: G | None = Field(default=None, exclude=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    max_volume_ul: float | None = None
-    waste_pos: tuple[float, float] | None = None
-    solvent_positions: tuple[float, float] | None = None
-    vial_positions: tuple[float, float] | None = None
-    syringe_solvents: list[SyringeSolventLink] | None = None
-
-    Z_min: float | None = None
-    Z_max: float | None = None
-    Z_slow: float | None = None
-    Fz: float | None = None
-    Fxy: float | None = None
-    Fa_push: float | None = None
-    Fa_push_slow: float | None = None
-    Fa_pull: float | None = None
-    Rest_x: float | None = None
-    Rest_y: float | None = None
+    max_volume_ul: PositiveFloat | None = Field(default=None, exclude=True, repr=False)
+    waste_pos: tuple[NonNegativeFloat, NonNegativeFloat] | None = Field(default=None, exclude=True, repr=False)
+    solvent_positions: list[tuple[NonNegativeFloat, NonNegativeFloat]] | None = Field(default=None, exclude=True,
+                                                                                      repr=False)
+    vial_positions: list[tuple[NonNegativeFloat, NonNegativeFloat]] | None = Field(default=None, exclude=True,
+                                                                                   repr=False)
+    Z_min: float | None = Field(default=None, exclude=True, repr=False)
+    Z_max: float | None = Field(default=None, exclude=True, repr=False)
+    Z_slow: float | None = Field(default=None, exclude=True, repr=False)
+    Fz: float | None = Field(default=None, exclude=True, repr=False)
+    Fxy: float | None = Field(default=None, exclude=True, repr=False)
+    Fa_push: float | None = Field(default=None, exclude=True, repr=False)
+    Fa_push_slow: float | None = Field(default=None, exclude=True, repr=False)
+    Fa_pull: float | None = Field(default=None, exclude=True, repr=False)
+    Rest_x: float | None = Field(default=None, exclude=True, repr=False)
+    Rest_y: float | None = Field(default=None, exclude=True, repr=False)
 
     # ---------- lifecycle ----------
     def start(self, **g_kwargs: Any) -> None:
         self.g = G(outfile=str(self.outfile), **g_kwargs)
-        self._init_from_setup()
+        try:
+            self._init_from_setup()
+        except Exception:
+            self.stop()
+            raise
 
     def stop(self) -> None:
         if self.g is None:
             return
-        g = self.g
-        if hasattr(g, "teardown"):
-            try:
-                g.teardown()
-            except Exception:
-                pass
-        self.g = None
+        try:
+            self.g.teardown()
+        finally:
+            self.g = None # even if teardown fails
 
+    # -------- context manager --------
     def __enter__(self) -> "PipetG":
         self.start()
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
         self.stop()
-
-    def _require_g(self) -> G:
+    
+    # ---------- g-getter ----------
+    def _get_g(self) -> G:
+        self._get_ready()
         if self.g is None:
             raise RuntimeError("PipetG is not started. Call .start() or use `with PipetG(...) as g:`.")
         return self.g
 
-    def _require_ready(self) -> None:
+    def _get_ready(self) -> None:
         if (
             self.max_volume_ul is None
             or self.waste_pos is None
             or self.solvent_positions is None
-            or self.cal_by_solvent is None
+            or self.vial_positions is None
             or self.Z_min is None
             or self.Z_max is None
             or self.Z_slow is None
@@ -91,7 +94,7 @@ class PipetG(BaseModel):
         return getattr(g, name)
 
     # ---------- setup picking ----------
-    def _pick_syringe(self):
+    def _get_syringe(self):
         s = next((x for x in self.setup.syringes if x.id == self.syringe_id), None)
         if s is None:
             raise ValueError(f"No syringe with id={self.syringe_id} in setup.")
@@ -101,10 +104,12 @@ class PipetG(BaseModel):
 
     # ---------- init ----------
     def _init_from_setup(self) -> None:
-        rack = self.setup.racks[0]
-        machine = self.setup.machine
-        syringe = Syringe.get_by_id(self.syringe_id) 
+        if len(self.setup.racks) == 0:
+            raise ValueError("Racks are not set in setup.")
 
+        syringe = self._get_syringe()
+        racks = self.setup.racks
+        machine = self.setup.machine
         # syringe
         self.max_volume_ul = syringe.nominal_volume_ul
 
@@ -121,58 +126,65 @@ class PipetG(BaseModel):
         self.Rest_y =  machine.Rest_y
 
         # rack
-        self.waste_pos = (rack.waste_x, rack.waste_y)
+        self.waste_pos = (racks[0].waste_x, racks[0].waste_y) #TODO figure it out how to deal with multiple wastes
 
         # derived
-        self.solvent_positions = rack.solvent_positions
-        self.vial_positions = rack.vial_positions
-        self.syringe_solvents = self.setup.syringe_solvents
-        
-        self._require_ready()
+        self.solvent_positions = self.setup.solvent_positions
+        self.vial_positions = self.setup.vial_positions
+
+        self._get_ready()
 
     # ---------- displacement ----------
     def displacement(self, volume_ul: PositiveFloat, solvent_id: PositiveInt) -> float:
-        self._require_ready()
+        self._get_ready()
 
         v = volume_ul
-
         if v > self.max_volume_ul:  # type: ignore[arg-type]
             raise ValueError(f"Volume too large: {v} µL (max {self.max_volume_ul}).")
 
-        #link = self.syringe_solvents.get_link()
-
-        factor, backlash = cal[solvent_id]
+        link = self.setup.get_link(self.syringe_id, solvent_id)
+        if link is None:
+            raise ValueError(f"No SyringeSolventLink for syringe_id={self.syringe_id}, solvent_id={solvent_id}")
+        factor = link.real_correlation_factor
+        backlash = link.backlash_correction
         return v * factor + backlash
 
     # ---------- gcode blocks ----------
-    def prologue(self) -> None:
-        g = self._require_g()
+
+    def move_to(self, *, slow: bool=False, **attr) -> None:
+        if "z" in attr or "A" in attr:
+            raise ValueError("move_to() expects only XY/feed args, not z or A.")
+
+        g = self._get_g()
+        g.absolute()
+        g.move(z=self.Z_max, F=self.Fz)
+        g.move(**attr)
+        if slow:
+            g.move(z=self.Z_slow, F=self.Fz)
+        else:
+            g.move(z=self.Z_min, F=self.Fz)
+
+    # ----------- main funcs -----------
+    def home(self) -> None:
+        g = self._get_g()
         g.write("G21")     # mm
         g.write("G28 Z")   # home Z
         g.write("G28 Y X A")
 
-    def home(self) -> None:
-        self._require_ready()
-        g = self._require_g()
+    def finish(self) -> None:
+        g = self._get_g()
 
-        g.absolute()
-        g.move(z=self.Z_max, F=self.Fz)
-        g.move(self.Rest_x, self.Rest_y, F=self.Fxy)
-        g.move(z=self.Z_min, F=self.Fz)
+        self.move_to(x=self.Rest_x, y=self.Rest_y, F=self.Fxy)
         g.write("M84")
 
-    def remove_from_vial(self, x: float, y: float, volume_ul: float, solvent_number: str) -> None:
-        self._require_ready()
-        g = self._require_g()
+    def remove_from_vial(self, x: float, y: float, volume_ul: float, solvent_id: PositiveInt) -> None:
+        g = self._get_g()
 
         g.write("remove_from_vial")
-        g.absolute()
 
-        disp = self.displacement(volume_ul, solvent_number)
+        disp = self.displacement(volume_ul, solvent_id)
 
-        g.move(z=self.Z_max, F=self.Fz)
-        g.move(x, y, F=self.Fxy)
-        g.move(z=self.Z_min, F=self.Fz)
+        self.move_to(x=x, y=y, F=self.Fxy)
 
         g.relative()
         g.move(A=disp, F=self.Fa_pull)
@@ -180,64 +192,55 @@ class PipetG(BaseModel):
 
         g.move(z=self.Z_max, F=self.Fz)
 
-    def fill_vial(self, x: float, y: float, slow_push: bool = False) -> None:
-        self._require_ready()
-        g = self._require_g()
+    def fill_vial(self, x: float, y: float, slow: bool = False) -> None:
+        g = self._get_g()
 
         g.write("fill_vial")
-        g.absolute()
 
-        g.move(z=self.Z_max, F=self.Fz)
-        g.move(x, y, F=self.Fxy)
-
-        if slow_push:
-            g.move(z=self.Z_slow, F=self.Fz)
+        self.move_to(slow=slow, x=x, y=y, F=self.Fxy)
+        if slow:
             g.move(A=0, F=self.Fa_push_slow)
         else:
-            g.move(z=self.Z_min, F=self.Fz)
             g.move(A=0, F=self.Fa_push)
 
         g.move(z=self.Z_max, F=self.Fz)
 
-    def flush(self, volume_ul: float, *, repeats: int = 1, solvent_name: str) -> None:
-        self._require_ready()
-        g = self._require_g()
+    def flush(self, volume_ul: float, *,
+              repeats: PositiveInt = 1,
+              solvent_idx: NonNegativeInt,
+              solvent_id: PositiveInt) -> None:
+
+        g = self._get_g()
 
         pos = self.solvent_positions  # type: ignore[assignment]
-        if solvent_name not in pos:
-            raise KeyError(f"Unknown solvent '{solvent_name}'. Known: {list(pos)}")
+        if not (solvent_idx < len(pos)):
+            raise IndexError(f"Solvent idx '{solvent_idx}' is out of bound {len(pos)-1}.")
 
         g.write("flush")
-        sx, sy = pos[solvent_name]
+        sx, sy = pos[solvent_idx]
 
         for _ in range(int(repeats)):
-            self.remove_from_vial(sx, sy, volume_ul, solvent_name)
+            self.remove_from_vial(sx, sy, volume_ul, solvent_id)
 
             wx, wy = self.waste_pos  # type: ignore[misc]
-            g.write("fill_vial")
-            g.absolute()
-            g.move(**{self.Z_AXIS: self.Z_max}, F=self.Fz)
-            g.move(wx, wy, F=self.Fxy)
-            g.move(**{self.Z_AXIS: self.Z_min}, F=self.Fz)
-            g.move(**{self.P_AXIS: 0}, F=self.Fa_push)
-            g.move(**{self.Z_AXIS: self.Z_max}, F=self.Fz)
+            self.fill_vial(wx, wy)
 
     def process_vial(
         self,
         *,
-        vial_index_1based: int,
-        solvent_name: str,
+        vial_idx: NonNegativeInt,
+        solvent_idx: NonNegativeInt,
+        solvent_id: PositiveInt,
         volume_ul: float,
-        flush_required: bool,
-        slow_push: bool = False,
-        flush_repeats: int = 1,
+        slow: bool = False,
+        flush_repeats: NonNegativeInt = 0,
     ) -> None:
-        if flush_required:
-            self.flush(volume_ul, repeats=flush_repeats, solvent_name=solvent_name)
+        if flush_repeats > 0:
+            self.flush(volume_ul, repeats=flush_repeats, solvent_idx=solvent_idx, solvent_id=solvent_id)
 
         pos = self.solvent_positions  # type: ignore[assignment]
-        sx, sy = pos[solvent_name]
-        self.remove_from_vial(sx, sy, volume_ul, solvent_name)
+        sx, sy = pos[solvent_idx]
+        self.remove_from_vial(sx, sy, volume_ul, solvent_id=solvent_id)
 
-        vx, vy = self.vial_position(vial_index_1based)
-        self.fill_vial(vx, vy, slow_push=slow_push)
+        vx, vy = self.vial_positions[vial_idx]
+        self.fill_vial(vx, vy, slow=slow)

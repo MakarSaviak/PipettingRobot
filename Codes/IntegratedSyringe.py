@@ -11,6 +11,7 @@ class IntegratedSyringe(BaseModel):
     """
     syringe: Syringe           # the SQLModel instance
     offset: float = Field(default=0.0)
+    min_volume: float| None = None
 
     # optional: convenience properties that forward to Syringe
     @property

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, model_validator, ConfigDict
 from sqlmodel import select
 from typing import List
+from itertools import chain
 
 from .Solvent import Solvent
 from .Syringe import Syringe
@@ -16,7 +17,7 @@ class Setup(BaseModel):
     solvents: List[Solvent] = Field(default_factory=list)
     syringe_solvents: List[SyringeSolventLink] = Field(default_factory=list)
     racks: List[Rack] = Field(default_factory=list)
-    machine: Machine | None = None
+    machine: Machine
 
     # Keep the model consistent even when attributes are modified later
     model_config = ConfigDict(validate_assignment=True)
@@ -73,6 +74,16 @@ class Setup(BaseModel):
         return next(
             (l for l in self.syringe_solvents if l.syringe_id == syringe_id and l.solvent_id == solvent_id), None)
 
+    @property
+    def vial_positions(self) -> list[tuple[float, float]]:
+        # concatenates rack.positions_vial in self.racks order
+        return list(chain.from_iterable(r.positions_vial for r in self.racks))
+
+    @property
+    def solvent_positions(self) -> list[tuple[float, float]]:
+        # concatenates rack.positions_solvent in self.racks order
+        return list(chain.from_iterable(r.positions_solvent for r in self.racks))
+
 
 if __name__ == "__main__":
     create_db_and_tables()
@@ -81,7 +92,7 @@ if __name__ == "__main__":
 
     solvents = Solvent.get_all()
 
-    rack_data = {
+    rack_data1 = {
         "name": "GC-10-by-3_Solvent-20ml-3-by-1",
         "vial1_x": 180,
         "vial1_y": 0,
@@ -98,7 +109,28 @@ if __name__ == "__main__":
         "solvent_dy": 35,
         "solvent_dx": None,
     }
-    rack = Rack.model_validate(rack_data)
+    rack1 = Rack.model_validate(rack_data1)
+
+    rack_data2 = {
+        "name": "counterion-96",
+        "vial1_x": 0,
+        "vial1_y": 0,
+        "solvent1_x": 100,
+        "solvent1_y": 7.5,
+        "waste_x": 100,
+        "waste_y": 110,
+        "vial_dy": 10,
+        "vial_dx": 10,
+        "vial_rows": 6,
+        "vial_columns": 16,
+        "solvent_rows": 6,
+        "solvent_columns": 16,
+        "solvent_dy": 10,
+        "solvent_dx": 10
+    }
+    rack2 = Rack.model_validate(rack_data2)
+
+    racks = [rack1, rack2]
 
     machine_data = {
         "z_min_limit": 20,
@@ -120,10 +152,15 @@ if __name__ == "__main__":
         "name": "Test",
         "syringes": syringes,
         "solvents": solvents,
-        "racks": [rack],
+        "racks": racks,
         "machine": machine
     }
     setup = Setup.model_validate(setup_data)
 
-    link = setup.get_link(1, 7)
-    print(link)
+    # link = setup.get_link(1, 1)
+    # cf = link.real_correlation_factor
+    # bc = link.backlash_correction
+    # print(cf, bc)
+    v = setup.solvent_positions
+    for i, p in enumerate(v):
+        print(i, p)

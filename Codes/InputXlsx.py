@@ -4,84 +4,106 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 from openpyxl import Workbook
-from openpyxl.styles import Border, Side
 from openpyxl.comments import Comment
+from openpyxl.styles import Border, Side, Alignment
 
 from .PipetG import PipetG
+from .Rack import Rack
 
 
 _THIN = Side(style="thin")
 _GRID_BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+_CENTER = Alignment(horizontal="center", vertical="center")
 
 
 class InputXlsx(BaseModel):
     pipet: PipetG
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
-
-    @staticmethod
-    def _validate_sheet_name(name: str) -> None:
-        if not name:
-            raise ValueError("Excel sheet name must not be empty.")
-        if len(name) > 31:
-            raise ValueError(f"Excel sheet name too long (>31): '{name}'")
-        forbidden = set(r'[]:*?/\\')
-        if any(ch in forbidden for ch in name):
-            raise ValueError(f"Excel sheet name contains forbidden characters: '{name}'")
-
-    @staticmethod
-    def _make_numbered_grid(ws, *, n_rows: int, n_cols: int) -> None:
-        ws.sheet_view.showGridLines = True
-
-        k = 1
-        for c in range(1, n_cols + 1):
-            for r in range(1, n_rows + 1):
-                cell = ws.cell(row=r, column=c)
-                cell.value = None  # user types here
-                cell.border = _GRID_BORDER
-
-                cell.comment = Comment(str(k), "idx")  # “background index”
-                cell.comment.width = 60
-                cell.comment.height = 25
-                k += 1
 
     def create_empty_table(self, out_path: Path) -> Path:
         racks = self.pipet.setup.racks
         if not racks:
-            raise ValueError("setup.racks is empty; cannot create Excel template.")
+            raise ValueError("No racks in setup.")
+
+        wb = Workbook()
+        # remove the default sheet
+        wb.remove(wb.active)
+
+        for rack in racks:
+            self._add_rack_sheets(wb, rack)
 
         out_path = Path(out_path)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-
-        wb = Workbook()
-        wb.remove(wb.active)  # remove default sheet
-
-        # validate sheet names
-        sheet_names: list[str] = []
-        for r in racks:
-            sheet_names.append(f"{r.name}_solvents")
-            sheet_names.append(f"{r.name}_vials")
-
-        if len(sheet_names) != len(set(sheet_names)):
-            raise ValueError("Duplicate sheet names detected (rack names may not be unique).")
-
-        for sname in sheet_names:
-            self._validate_sheet_name(sname)
-
-        # create sheets + fill
-        for rack in racks:
-            ws_sol = wb.create_sheet(f"{rack.name}_solvents")
-            self._make_numbered_grid(
-                ws_sol,
-                n_rows=int(rack.solvent_rows),
-                n_cols=int(rack.solvent_columns),
-            )
-
-            ws_vial = wb.create_sheet(f"{rack.name}_vials")
-            self._make_numbered_grid(
-                ws_vial,
-                n_rows=int(rack.vial_rows),
-                n_cols=int(rack.vial_columns),
-            )
-
         wb.save(out_path)
         return out_path
+
+    # ----------------- internals -----------------
+    def _add_rack_sheets(self, wb: Workbook, rack: Rack) -> None:
+        sname_sol = f"{rack.name}_solvents"
+        sname_via = f"{rack.name}_vials"
+
+        # Excel sheet name limit
+        if len(sname_sol) > 31 or len(sname_via) > 31:
+            raise ValueError(
+                f"Excel sheet names must be <= 31 chars. Got '{sname_sol}' / '{sname_via}'. "
+                f"Shorten Rack.name."
+            )
+
+        ws_sol = wb.create_sheet(sname_sol)
+        ws_via = wb.create_sheet(sname_via)
+
+        # Solvents: comments only (cells stay empty)
+        self._fill_grid(
+            ws_sol,
+            n_rows=int(rack.solvent_rows),
+            n_cols=int(rack.solvent_columns),
+            mode="comment",
+        )
+
+        # Vials: numbers as actual cell values (no comments)
+        self._fill_grid(
+            ws_via,
+            n_rows=int(rack.vial_rows),
+            n_cols=int(rack.vial_columns),
+            mode="value",
+        )
+
+    def _fill_grid(self, ws, *, n_rows: int, n_cols: int, mode: str) -> None:
+        # make it look like a table even if Excel gridlines are off
+        ws.sheet_view.showGridLines = True
+
+        # basic sizing so the table is readable
+        for c in range(1, n_cols + 1):
+            ws.column_dimensions[self._col_letter(c)].width = 6
+        for r in range(1, n_rows + 1):
+            ws.row_dimensions[r].height = 18
+
+        k = 1
+        for c in range(1, n_cols + 1):          # column-wise fill
+            for r in range(1, n_rows + 1):
+                cell = ws.cell(row=r, column=c)
+                cell.border = _GRID_BORDER
+                cell.alignment = _CENTER
+
+                if mode == "value":
+                    cell.value = k
+                elif mode == "comment":
+                    cell.value = None  # you type here; index is in the note
+                    com = Comment(str(k), "idx")
+                    com.width = 60
+                    com.height = 25
+                    cell.comment = com
+                else:
+                    raise ValueError(f"Unknown mode: {mode}")
+
+                k += 1
+
+    @staticmethod
+    def _col_letter(n: int) -> str:
+        # 1 -> A, 26 -> Z, 27 -> AA, ...
+        s = ""
+        while n:
+            n, r = divmod(n - 1, 26)
+            s = chr(65 + r) + s
+        return s

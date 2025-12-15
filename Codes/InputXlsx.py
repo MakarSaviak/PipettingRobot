@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, model_validator, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill, Border, Side, Alignment
@@ -16,88 +16,144 @@ _THIN = Side(style="thin")
 _THIN_BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
 _CENTER = Alignment(horizontal="center", vertical="center")
 
-# NOTE (openpyxl colors):
-# - "00000000" is often "no fill" (transparent), not black.
-# - The fills below are ARGB (FF = opaque).
-_VIAL_FILL = PatternFill(fill_type="solid", fgColor="FFD9E1F2")     # light blue
-_SOLV_FILL = PatternFill(fill_type="solid", fgColor="FFFCE4D6")     # light orange
+# ARGB (FF = opaque)
+_VIAL_FILL = PatternFill(fill_type="solid", fgColor="FFD9E1F2")  # light blue
+_SOLV_FILL = PatternFill(fill_type="solid", fgColor="FFFCE4D6")  # light orange
 
 
 class InputXlsx(BaseModel):
-    """
-    Construct normally: x = InputXlsx(pipet=pg, "run.xlsx"); x.load("run.xlsx")
-    """
     pipet: PipetG
-    xlsx_path: Path | None = None
 
-    # runtime-only
+    # runtime-only caches
+    xlsx_path: Path | None = Field(default=None, exclude=True, repr=False)
     wb: Workbook | None = Field(default=None, exclude=True, repr=False)
 
     model_config = ConfigDict(
         arbitrary_types_allowed=True,
-        validate_assignment=True,   # <- key part
+        validate_assignment=True,  # <- re-run validation on every .load()
     )
+
+    # ---------------- I/O ----------------
 
     def load(self, xlsx_path: str | Path, **wb_kwargs: Any) -> None:
         """
-        Load workbook into `self.wb`. This will trigger validation because of validate_assignment=True.
+        Load an existing workbook and trigger validators (via validate_assignment).
         """
         path = Path(xlsx_path)
-        wb = load_workbook(path, **wb_kwargs)
+        if not path.is_file():
+            raise FileNotFoundError(path)
 
-        # set path first (optional), then wb (validation happens after each assignment)
+        # set path first (nice for error messages), then wb to trigger validation
         self.xlsx_path = path
-        self.wb = wb  # <- triggers @model_validator again
+        self.wb = load_workbook(filename=str(path), **wb_kwargs)
 
     @classmethod
     def from_excel(cls, xlsx_path: str | Path, pipet: PipetG, **wb_kwargs: Any) -> "InputXlsx":
-        """
-        Alternative constructor. Use: x = InputXlsx.from_excel("run.xlsx", pipet=pg)
-        """
         obj = cls(pipet=pipet)
         obj.load(xlsx_path, **wb_kwargs)  # triggers validation
         return obj
 
+    # ------------- validators -------------
+
     @model_validator(mode="after")
-    def _validate_solvent_ids_from_grids(self) -> "InputXlsx":
-        # allow “writer mode” where workbook isn't loaded yet
+    def _validate_solvent_ids_in_solvent_grids(self) -> "InputXlsx":
+        """
+        In each <Rack.name>_solvents sheet:
+        - user writes SOLVENT_IDs into the grid cells (values, not comments)
+        - validate each non-empty value is an int and exists in setup.solvents ids
+        """
         if self.wb is None:
             return self
 
-        # allowed solvent ids from setup
-        allowed: set[int] = set()
-        for s in self.pipet.setup.solvents:
-            if s.id is None:
-                raise ValueError("setup.solvents contains solvent with id=None.")
-            allowed.add(int(s.id))
+        allowed = {int(s.id) for s in self.pipet.setup.solvents if s.id is not None}
+        if not allowed:
+            raise ValueError("setup.solvents contains no valid ids; cannot validate solvent IDs.")
 
         for rack in self.pipet.setup.racks:
-            ws_name = f"{rack.name}_solvents"
-            if ws_name not in self.wb.sheetnames:
-                raise ValueError(f"Missing sheet '{ws_name}' in the Excel file.")
-            ws = self.wb[ws_name]
+            sheet = f"{rack.name}_solvents"
+            if sheet not in self.wb.sheetnames:
+                raise ValueError(f"Missing sheet '{sheet}' in {self.xlsx_path or 'workbook'}.")
 
+            ws = self.wb[sheet]
             n_rows = int(rack.solvent_rows)
             n_cols = int(rack.solvent_columns)
+            n = n_rows * n_cols
 
-            for r in range(1, n_rows + 1):
-                for c in range(1, n_cols + 1):
-                    cell = ws.cell(row=r, column=c)
-                    raw = cell.value
-                    if raw is None or raw == "":
-                        continue
+            for local_idx in range(n):
+                col = local_idx // n_rows
+                row = local_idx % n_rows
+                cell = ws.cell(row=row + 1, column=col + 1)
 
-                    try:
-                        solvent_id = int(raw)
-                    except (TypeError, ValueError):
-                        raise ValueError(f"{ws_name}!{cell.coordinate}: must be int, got {raw!r}")
+                val = cell.value
+                if val is None or val == "":
+                    continue
 
-                    if solvent_id not in allowed:
-                        raise ValueError(
-                            f"{ws_name}!{cell.coordinate}: solvent_id={solvent_id} not in setup.solvents={sorted(allowed)}"
-                        )
+                try:
+                    solvent_id = int(val)
+                except Exception:
+                    raise ValueError(
+                        f"{sheet}!{cell.coordinate}: solvent_id must be an integer, got {val!r}."
+                    )
+
+                if solvent_id not in allowed:
+                    raise ValueError(
+                        f"{sheet}!{cell.coordinate}: solvent_id={solvent_id} not found in setup.solvents."
+                    )
 
         return self
+
+    @model_validator(mode="after")
+    def _validate_vial_program_solvent_index_bounds(self) -> "InputXlsx":
+        """
+        In each <Rack.name>_vials sheet, below-table column 'solvent_index' (col C):
+        validate each non-empty solvent_index is within 1..N where
+        N = total solvent slots across ALL racks in setup order.
+        """
+        if self.wb is None:
+            return self
+
+        total_slots = len(self.pipet.setup.solvent_positions)
+        if total_slots <= 0:
+            raise ValueError("setup.solvent_positions is empty; cannot validate solvent_index bounds.")
+
+        for rack in self.pipet.setup.racks:
+            sheet = f"{rack.name}_vials"
+            if sheet not in self.wb.sheetnames:
+                raise ValueError(f"Missing sheet '{sheet}' in {self.xlsx_path or 'workbook'}.")
+
+            ws = self.wb[sheet]
+            n_rows = int(rack.vial_rows)
+            n_cols = int(rack.vial_columns)
+            n = n_rows * n_cols
+
+            # must match your template writer
+            table_top = n_rows + 2
+            solvent_index_col = 3  # "solvent_index" is column C
+
+            for i in range(n):
+                r = table_top + 1 + i
+                cell = ws.cell(row=r, column=solvent_index_col)
+                val = cell.value
+                if val is None or val == "":
+                    continue
+
+                try:
+                    solvent_index = int(val)
+                except Exception:
+                    raise ValueError(
+                        f"{sheet}!{cell.coordinate}: solvent_index must be an integer, got {val!r}."
+                    )
+
+                # IMPORTANT: this assumes your Excel indices are 1-based (as in your template).
+                if not (1 <= solvent_index <= total_slots):
+                    raise ValueError(
+                        f"{sheet}!{cell.coordinate}: solvent_index={solvent_index} out of bounds "
+                        f"(allowed 1..{total_slots})."
+                    )
+
+        return self
+
+    # ---------------- template writing ----------------
 
     def create_empty_table(self, out_path: Path) -> Path:
         """
@@ -119,15 +175,13 @@ class InputXlsx(BaseModel):
             raise ValueError("No racks in pipet.setup.racks")
 
         wb = Workbook()
-        wb.remove(wb.active)  # remove default sheet
+        wb.remove(wb.active)
 
-        # ---- 1) solvents first (as requested) ----
         solvent_start = 1
         for rack in racks:
             ws = wb.create_sheet(title=f"{rack.name}_solvents")
             solvent_start = self._write_solvent_sheet(ws, rack, start_index=solvent_start)
 
-        # ---- 2) vials afterwards ----
         vial_start = 1
         for rack in racks:
             ws = wb.create_sheet(title=f"{rack.name}_vials")
@@ -138,8 +192,6 @@ class InputXlsx(BaseModel):
         wb.save(str(out_path))
         return out_path
 
-    # ---------------- helpers ----------------
-
     def _write_solvent_sheet(self, ws, rack: Rack, *, start_index: int) -> int:
         n_rows = int(rack.solvent_rows)
         n_cols = int(rack.solvent_columns)
@@ -148,15 +200,12 @@ class InputXlsx(BaseModel):
         for local_idx in range(n):
             global_idx = start_index + local_idx
 
-            col = local_idx // n_rows          # 0..n_cols-1
-            row = local_idx % n_rows           # 0..n_rows-1
+            col = local_idx // n_rows
+            row = local_idx % n_rows
 
             cell = ws.cell(row=row + 1, column=col + 1)
-
-            # leave value empty, store index as comment
             cell.value = None
             cell.comment = Comment(str(global_idx), "index")
-
             cell.fill = _SOLV_FILL
             cell.border = _THIN_BORDER
             cell.alignment = _CENTER
@@ -168,7 +217,6 @@ class InputXlsx(BaseModel):
         n_cols = int(rack.vial_columns)
         n = n_rows * n_cols
 
-        # --- main blue grid with vial indices in cells ---
         for local_idx in range(n):
             global_idx = start_index + local_idx
 
@@ -177,21 +225,16 @@ class InputXlsx(BaseModel):
 
             cell = ws.cell(row=row + 1, column=col + 1)
             cell.value = global_idx
-
             cell.fill = _VIAL_FILL
             cell.border = _THIN_BORDER
             cell.alignment = _CENTER
 
-        # --- below: index table (A:C) ---
-        # one blank row between grid and table
         table_top = n_rows + 2
 
-        # header row
         ws.cell(row=table_top, column=1, value="vial_index").border = _THIN_BORDER
         ws.cell(row=table_top, column=2, value="volume_uL").border = _THIN_BORDER
         ws.cell(row=table_top, column=3, value="solvent_index").border = _THIN_BORDER
 
-        # data rows (no fill, just borders)
         for i in range(n):
             r = table_top + 1 + i
 

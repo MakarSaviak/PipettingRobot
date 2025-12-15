@@ -285,6 +285,9 @@ class InputXlsx(BaseModel):
 
         solvent_id_map = self._solvent_id_by_global_solvent_index()
 
+        def _is_empty(v: Any) -> bool:
+            return v is None or (isinstance(v, str) and v.strip() == "")
+
         def run(pg: PipetG) -> None:
             if do_home:
                 pg.home()
@@ -303,22 +306,23 @@ class InputXlsx(BaseModel):
                     vol_cell = ws.cell(row=r, column=2)
                     sidx_cell = ws.cell(row=r, column=3)
 
-                    vial_index = self._as_int(vial_cell.value, where=f"{rack.name}_vials!{vial_cell.coordinate}")
-                    solvent_index = self._as_int(sidx_cell.value, where=f"{rack.name}_vials!{sidx_cell.coordinate}")
                     volume_val = vol_cell.value
+                    sidx_raw = sidx_cell.value
 
-                    # skip completely empty lines
-                    if (solvent_index is None) and (volume_val is None):
+                    # ✅ user didn't specify an instruction -> skip
+                    # (vial_index is always filled, so don't require it to be empty)
+                    if _is_empty(volume_val) and _is_empty(sidx_raw):
                         continue
 
-                    if (vial_index is None) and (solvent_index is None) and (volume_val is None):
-                        continue
+                    vial_index = self._as_int(vial_cell.value, where=f"{rack.name}_vials!{vial_cell.coordinate}")
+                    solvent_index = self._as_int(sidx_raw, where=f"{rack.name}_vials!{sidx_cell.coordinate}")
 
+                    # partial row -> error
                     if vial_index is None:
                         raise ValueError(f"{rack.name}_vials!{vial_cell.coordinate}: vial index is empty.")
                     if solvent_index is None:
                         raise ValueError(f"{rack.name}_vials!{sidx_cell.coordinate}: solvent_index is empty.")
-                    if volume_val is None:
+                    if _is_empty(volume_val):
                         raise ValueError(f"{rack.name}_vials!{vol_cell.coordinate}: volume_uL is empty.")
 
                     volume_ul = float(volume_val)
@@ -351,11 +355,5 @@ class InputXlsx(BaseModel):
             if do_finish:
                 pg.finish()
 
-        # If PipetG already started, don't restart it.
-        if self.pipet.g is None:
-            with self.pipet:
-                run(self.pipet)
-        else:
-            run(self.pipet)
-
-        return self.pipet.outfile
+        run(self.pipet)
+        return Path(self.pipet.outfile)

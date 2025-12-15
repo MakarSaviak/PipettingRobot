@@ -1,164 +1,171 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Union
+from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field
 from openpyxl import Workbook
 from openpyxl.comments import Comment
-from openpyxl.styles import Border, Side, Alignment, PatternFill, Font
+from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
 from openpyxl.utils import get_column_letter
 
 from .PipetG import PipetG
-from .Rack import Rack
+
+
+def _safe_sheet_name(name: str) -> str:
+    # Excel sheet name rules:
+    # - max 31 chars
+    # - cannot contain: : \ / ? * [ ]
+    bad = r'[]:*?/\\'
+    out = "".join("_" if ch in bad else ch for ch in name)
+    out = out.strip() or "Sheet"
+    return out[:31]
 
 
 class InputXlsx(BaseModel):
     pipet: PipetG = Field(exclude=True)
-
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
-    # Light fills (ARGB)
-    _VIAL_FILL = PatternFill(fill_type="solid", fgColor="FFDDEBF7")     # light blue
-    _SOLVENT_FILL = PatternFill(fill_type="solid", fgColor="FFFCE4D6")  # light orange
+    # Colors
+    _FILL_BG: Final = PatternFill("solid", fgColor="FFFFFF")      # off-white background
+    _FILL_VIAL: Final = PatternFill("solid", fgColor="D9E8FF")    # light blue
+    _FILL_SOLV: Final = PatternFill("solid", fgColor="FFE7CC")    # light orange
 
-    # Simple visible borders
-    _THIN = Side(style="thin")
-    _BORDER = Border(left=_THIN, right=_THIN, top=_THIN, bottom=_THIN)
+    # Borders / formatting
+    _SIDE: Final = Side(style="thin", color="BFBFBF")
+    _BORDER: Final = Border(left=_SIDE, right=_SIDE, top=_SIDE, bottom=_SIDE)
+    _CENTER: Final = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-    _CENTER = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    _BOLD = Font(bold=True)
-    _NOFILL = PatternFill()
-
-    def create_empty_table(self, out_path: Union[str, Path]) -> Path:
-        """
-        Create an Excel workbook formatted for the racks in pipet.setup.
-        - For each rack: sheets <rack.name>_vials and <rack.name>_solvents
-        - Vials: filled with indices (columnwise), blue
-        - Solvents: empty cells but with index in comment, orange
-        """
-        path = Path(out_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+    def create_empty_table(self, out_path: Path) -> Path:
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
 
         wb = Workbook()
         # remove default sheet
         wb.remove(wb.active)
 
-        racks = self.pipet.setup.racks
-        if not racks:
-            raise ValueError("No racks in setup; cannot create Excel template.")
+        vial_global = 1
+        solvent_global = 1
 
-        for rack in racks:
-            self._add_rack_sheets(wb, rack)
+        for rack in self.pipet.setup.racks:
+            # ---- solvents sheet ----
+            ws_s = wb.create_sheet(_safe_sheet_name(f"{rack.name}_solvents"))
+            r_rows = int(rack.solvent_rows)
+            r_cols = int(rack.solvent_columns)
 
-        wb.save(path)
-        return path
+            # paint a "work area" (bg) slightly larger than the grid
+            self._paint_bg(ws_s, rows=max(r_rows, 1) + 2, cols=max(r_cols, 1) + 2)
+            self._format_grid(ws_s, rows=r_rows, cols=r_cols)
 
-    # ----------------- internals -----------------
+            solvent_global = self._fill_solvent_grid_with_comments(
+                ws_s,
+                n_rows=r_rows,
+                n_cols=r_cols,
+                start_index=solvent_global,
+            )
 
-    def _add_rack_sheets(self, wb: Workbook, rack: Rack) -> None:
-        vials_name = f"{rack.name}_vials"
-        solvents_name = f"{rack.name}_solvents"
+            # ---- vials sheet ----
+            ws_v = wb.create_sheet(_safe_sheet_name(f"{rack.name}_vials"))
+            v_rows = int(rack.vial_rows)
+            v_cols = int(rack.vial_columns)
+            n_vials = v_rows * v_cols
 
-        for nm in (vials_name, solvents_name):
-            if len(nm) > 31:
-                raise ValueError(
-                    f"Excel sheet name too long ({len(nm)}): '{nm}'. "
-                    f"Please shorten Rack.name so that '<name>_vials' and '<name>_solvents' fit into 31 chars."
-                )
+            # we need space below the grid for the index column table:
+            index_header_row = v_rows + 3               # 2-row gap
+            index_last_row = index_header_row + n_vials  # header + n_vials
 
-        ws_v = wb.create_sheet(vials_name)
-        ws_s = wb.create_sheet(solvents_name)
+            # paint bg for grid + index table area (a bit wider than needed)
+            self._paint_bg(ws_v, rows=max(index_last_row, 1) + 2, cols=max(v_cols, 1) + 2)
+            self._format_grid(ws_v, rows=v_rows, cols=v_cols)
 
-        n_vial_rows = int(rack.vial_rows)
-        n_vial_cols = int(rack.vial_columns)
+            vial_global = self._fill_vial_grid_with_numbers(
+                ws_v,
+                n_rows=v_rows,
+                n_cols=v_cols,
+                start_index=vial_global,
+            )
 
-        self._fill_grid(
-            ws_v,
-            n_rows=n_vial_rows,
-            n_cols=n_vial_cols,
-            mode="value",
-        )
-        # NEW: add the long index column under the vial grid
-        self._add_vial_index_column(
-            ws_v,
-            n_rows=n_vial_rows,
-            n_cols=n_vial_cols,
-        )
+            self._add_vial_index_column_table(
+                ws_v,
+                start_row=index_header_row,
+                start_index=vial_global - n_vials,  # indices we just wrote into the grid
+                count=n_vials,
+            )
 
-        self._fill_grid(
-            ws_s,
-            n_rows=int(rack.solvent_rows),
-            n_cols=int(rack.solvent_columns),
-            mode="comment",
-        )
+        wb.save(out_path)
+        return out_path
 
-    def _fill_grid(
-        self,
-        ws,
-        *,
-        n_rows: int,
-        n_cols: int,
-        mode: Literal["value", "comment"],
-    ) -> None:
-        # make the grid look like a grid in Excel
+    # ---------------- helpers ----------------
+
+    def _paint_bg(self, ws, *, rows: int, cols: int) -> None:
+        """Fill a finite 'work area' with off-white so the nice background stays."""
+        for r in range(1, rows + 1):
+            for c in range(1, cols + 1):
+                cell = ws.cell(r, c)
+                cell.fill = self._FILL_BG
+
+    def _format_grid(self, ws, *, rows: int, cols: int) -> None:
+        # make columns a bit readable
+        for c in range(1, cols + 1):
+            ws.column_dimensions[get_column_letter(c)].width = 5.0
+        for r in range(1, rows + 1):
+            ws.row_dimensions[r].height = 18.0
+
+        # hide default gridlines; we draw borders instead
         ws.sheet_view.showGridLines = False
 
-        # sizing: tweak if you want
-        for c in range(1, n_cols + 1):
-            ws.column_dimensions[get_column_letter(c)].width = 6
-        for r in range(1, n_rows + 1):
-            ws.row_dimensions[r].height = 18
+    def _fill_solvent_grid_with_comments(self, ws, *, n_rows: int, n_cols: int, start_index: int) -> int:
+        """Orange grid, empty values, comment contains global solvent index."""
+        idx = start_index
+        for k in range(n_rows * n_cols):
+            col = (k // n_rows) + 1  # column-wise fill
+            row = (k % n_rows) + 1
 
-        k = 1  # index starting at 1
-        for col in range(1, n_cols + 1):          # columnwise
-            for row in range(1, n_rows + 1):      # down the column
-                cell = ws.cell(row=row, column=col)
+            cell = ws.cell(row=row, column=col)
+            cell.fill = self._FILL_SOLV
+            cell.border = self._BORDER
+            cell.alignment = self._CENTER
+            cell.value = None
 
-                cell.border = self._BORDER
-                cell.alignment = self._CENTER
+            # comment shows index, cell remains editable
+            cell.comment = Comment(f"{idx}", "index")
+            idx += 1
+        return idx
 
-                if mode == "value":
-                    cell.fill = self._VIAL_FILL
-                    cell.value = k
-                else:
-                    cell.fill = self._SOLVENT_FILL
-                    cell.value = None
-                    com = Comment(str(k), "idx")
-                    com.width = 60
-                    com.height = 25
-                    cell.comment = com
+    def _fill_vial_grid_with_numbers(self, ws, *, n_rows: int, n_cols: int, start_index: int) -> int:
+        """Blue grid, values are global vial indices, column-wise fill."""
+        idx = start_index
+        for k in range(n_rows * n_cols):
+            col = (k // n_rows) + 1
+            row = (k % n_rows) + 1
 
-                k += 1
+            cell = ws.cell(row=row, column=col)
+            cell.fill = self._FILL_VIAL
+            cell.border = self._BORDER
+            cell.alignment = self._CENTER
+            cell.value = idx
+            idx += 1
+        return idx
 
-    def _add_vial_index_column(self, ws, *, n_rows: int, n_cols: int) -> None:
+    def _add_vial_index_column_table(self, ws, *, start_row: int, start_index: int, count: int) -> None:
         """
-        Adds a single-column table below the vial grid:
-        header 'index' + 1..N with borders, no special coloring.
+        Below the vial grid:
+        Column A only, header 'index' + [start_index .. start_index+count-1]
+        Borders yes, no special coloring (background stays off-white).
         """
-        n = int(n_rows) * int(n_cols)
-
-        start_row = n_rows + 3  # "below" with a little vertical indent
-        start_col = 1  # horizontal indent (column A)
-
-        # header
-        h = ws.cell(row=start_row, column=start_col)
+        # header in A
+        h = ws.cell(row=start_row, column=1)
         h.value = "index"
-        h.font = self._BOLD
-        h.border = self._BORDER
+        h.font = Font(bold=True)
         h.alignment = self._CENTER
-        h.fill = self._NOFILL
+        h.border = self._BORDER
 
-        # values 1..N
-        for i in range(1, n + 1):
-            c = ws.cell(row=start_row + i, column=start_col)
-            c.value = i
-            c.border = self._BORDER
+        # values
+        for i in range(count):
+            c = ws.cell(row=start_row + 1 + i, column=1)
+            c.value = start_index + i
             c.alignment = self._CENTER
-            c.fill = self._NOFILL
+            c.border = self._BORDER
 
-        # make that column readable
-        ws.column_dimensions[get_column_letter(start_col)].width = max(
-            ws.column_dimensions[get_column_letter(start_col)].width or 0,
-            10,
-        )
+        # make column A readable
+        ws.column_dimensions["A"].width = 10.0

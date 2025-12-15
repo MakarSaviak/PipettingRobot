@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
-from pydantic import BaseModel, ConfigDict
-from openpyxl import Workbook
+from pydantic import BaseModel, ConfigDict, model_validator, Field
+from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill, Border, Side, Alignment
 
@@ -23,9 +24,80 @@ _SOLV_FILL = PatternFill(fill_type="solid", fgColor="FFFCE4D6")     # light oran
 
 
 class InputXlsx(BaseModel):
+    """
+    Construct normally: x = InputXlsx(pipet=pg, "run.xlsx"); x.load("run.xlsx")
+    """
     pipet: PipetG
+    xlsx_path: Path | None = None
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    # runtime-only
+    wb: Workbook | None = Field(default=None, exclude=True, repr=False)
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        validate_assignment=True,   # <- key part
+    )
+
+    def load(self, xlsx_path: str | Path, **wb_kwargs: Any) -> None:
+        """
+        Load workbook into `self.wb`. This will trigger validation because of validate_assignment=True.
+        """
+        path = Path(xlsx_path)
+        wb = load_workbook(path, **wb_kwargs)
+
+        # set path first (optional), then wb (validation happens after each assignment)
+        self.xlsx_path = path
+        self.wb = wb  # <- triggers @model_validator again
+
+    @classmethod
+    def from_excel(cls, xlsx_path: str | Path, pipet: PipetG, **wb_kwargs: Any) -> "InputXlsx":
+        """
+        Alternative constructor. Use: x = InputXlsx.from_excel("run.xlsx", pipet=pg)
+        """
+        obj = cls(pipet=pipet)
+        obj.load(xlsx_path, **wb_kwargs)  # triggers validation
+        return obj
+
+    @model_validator(mode="after")
+    def _validate_solvent_ids_from_grids(self) -> "InputXlsx":
+        # allow “writer mode” where workbook isn't loaded yet
+        if self.wb is None:
+            return self
+
+        # allowed solvent ids from setup
+        allowed: set[int] = set()
+        for s in self.pipet.setup.solvents:
+            if s.id is None:
+                raise ValueError("setup.solvents contains solvent with id=None.")
+            allowed.add(int(s.id))
+
+        for rack in self.pipet.setup.racks:
+            ws_name = f"{rack.name}_solvents"
+            if ws_name not in self.wb.sheetnames:
+                raise ValueError(f"Missing sheet '{ws_name}' in the Excel file.")
+            ws = self.wb[ws_name]
+
+            n_rows = int(rack.solvent_rows)
+            n_cols = int(rack.solvent_columns)
+
+            for r in range(1, n_rows + 1):
+                for c in range(1, n_cols + 1):
+                    cell = ws.cell(row=r, column=c)
+                    raw = cell.value
+                    if raw is None or raw == "":
+                        continue
+
+                    try:
+                        solvent_id = int(raw)
+                    except (TypeError, ValueError):
+                        raise ValueError(f"{ws_name}!{cell.coordinate}: must be int, got {raw!r}")
+
+                    if solvent_id not in allowed:
+                        raise ValueError(
+                            f"{ws_name}!{cell.coordinate}: solvent_id={solvent_id} not in setup.solvents={sorted(allowed)}"
+                        )
+
+        return self
 
     def create_empty_table(self, out_path: Path) -> Path:
         """
@@ -47,8 +119,7 @@ class InputXlsx(BaseModel):
             raise ValueError("No racks in pipet.setup.racks")
 
         wb = Workbook()
-        # remove default sheet
-        wb.remove(wb.active)
+        wb.remove(wb.active)  # remove default sheet
 
         # ---- 1) solvents first (as requested) ----
         solvent_start = 1

@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
     QComboBox,
     QFileDialog,
     QFormLayout,
@@ -17,7 +15,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QMenu,
     QMessageBox,
@@ -53,11 +50,11 @@ class PipetGuiWindow(QMainWindow):
 
         self._rack_defs: dict[str, Rack] = {}
         self._machine_names: list[str] = []
+        self._rack_actions: dict[str, QAction] = {}
 
         self._build_ui()
         self._apply_style()
 
-        # DB tables (so Syringe.get_by_id / Solvent.get_all / Setup validator work)
         try:
             create_db_and_tables()
         except Exception as e:
@@ -109,7 +106,6 @@ class PipetGuiWindow(QMainWindow):
         self.cmb_machine = QComboBox()
         form.addRow("Machine", self.cmb_machine)
 
-        # Rack selector button (dropdown) + selected list (reorderable)
         racks_row = QWidget()
         racks_row_l = QVBoxLayout(racks_row)
         racks_row_l.setContentsMargins(0, 0, 0, 0)
@@ -133,7 +129,7 @@ class PipetGuiWindow(QMainWindow):
         racks_row_l.addLayout(top_rack_bar)
 
         self.lst_selected_racks = QListWidget()
-        self.lst_selected_racks.setDragDropMode(QListWidget.InternalMove)  # drag to reorder
+        self.lst_selected_racks.setDragDropMode(QListWidget.InternalMove)
         self.lst_selected_racks.setDefaultDropAction(Qt.MoveAction)
         self.lst_selected_racks.setMinimumHeight(140)
         self.lst_selected_racks.model().rowsMoved.connect(self._update_setup_summary)
@@ -209,16 +205,6 @@ class PipetGuiWindow(QMainWindow):
         out_row.addWidget(btn_save_gcode)
         glay.addLayout(out_row)
 
-        opts = QHBoxLayout()
-        self.chk_home = QCheckBox("Home")
-        self.chk_home.setChecked(True)
-        self.chk_finish = QCheckBox("Finish")
-        self.chk_finish.setChecked(True)
-        opts.addWidget(self.chk_home)
-        opts.addWidget(self.chk_finish)
-        opts.addStretch(1)
-        glay.addLayout(opts)
-
         self.btn_generate_gcode = QPushButton("Generate G-code")
         self.btn_generate_gcode.clicked.connect(self._on_generate_gcode)
         glay.addWidget(self.btn_generate_gcode)
@@ -276,17 +262,6 @@ class PipetGuiWindow(QMainWindow):
             }
             QPushButton:hover { background: #3778ff; }
             QPushButton:pressed { background: #1f57c5; }
-            QCheckBox { spacing: 8px; }
-            QCheckBox::indicator {
-                width: 18px; height: 18px;
-                border-radius: 6px;
-                border: 1px solid #263042;
-                background: #151a22;
-            }
-            QCheckBox::indicator:checked {
-                background: #2a6df4;
-                border: 1px solid #2a6df4;
-            }
             QFrame#card {
                 background: #0f141d;
                 border: 1px solid #263042;
@@ -311,8 +286,7 @@ class PipetGuiWindow(QMainWindow):
             QMessageBox.critical(
                 self,
                 "Config folder missing",
-                f"Expected config folders:\n\n"
-                f"{self._racks_dir}\n{self._machines_dir}\n\n"
+                f"Expected config folders:\n\n{self._racks_dir}\n{self._machines_dir}\n\n"
                 f"Make sure this GUI file is inside your Codes package next to 'config/'.",
             )
             return
@@ -326,7 +300,6 @@ class PipetGuiWindow(QMainWindow):
         for m in machine_names:
             self.cmb_machine.addItem(m)
 
-        # Pre-load Rack models (nice for summary + faster later)
         self._rack_defs.clear()
         for name in rack_names:
             try:
@@ -334,7 +307,6 @@ class PipetGuiWindow(QMainWindow):
             except Exception as e:
                 self._log(f"[WARN] Cannot load rack '{name}': {e!s}")
 
-        # Rack selection menu
         self.racks_menu.clear()
 
         act_all = QAction("Select all", self)
@@ -347,7 +319,7 @@ class PipetGuiWindow(QMainWindow):
 
         self.racks_menu.addSeparator()
 
-        self._rack_actions: dict[str, QAction] = {}
+        self._rack_actions.clear()
         for name in rack_names:
             act = QAction(name, self)
             act.setCheckable(True)
@@ -440,12 +412,7 @@ class PipetGuiWindow(QMainWindow):
     # ---------------- File pickers ----------------
 
     def _pick_template_path(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Excel template",
-            "",
-            "Excel files (*.xlsx)",
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "Save Excel template", "", "Excel files (*.xlsx)")
         if not path:
             return
         if not path.lower().endswith(".xlsx"):
@@ -453,23 +420,13 @@ class PipetGuiWindow(QMainWindow):
         self.edt_template_path.setText(path)
 
     def _pick_program_path(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open Excel program",
-            "",
-            "Excel files (*.xlsx)",
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "Open Excel program", "", "Excel files (*.xlsx)")
         if not path:
             return
         self.edt_program_path.setText(path)
 
     def _pick_gcode_path(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save G-code",
-            "",
-            "G-code files (*.gcode)",
-        )
+        path, _ = QFileDialog.getSaveFileName(self, "Save G-code", "", "G-code files (*.gcode)")
         if not path:
             return
         if not path.lower().endswith(".gcode"):
@@ -527,7 +484,6 @@ class PipetGuiWindow(QMainWindow):
             out_path = Path(out)
             out_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # outfile is irrelevant for template creation, but PipetG needs one
             dummy_gcode = (out_path.parent / "_dummy.gcode").resolve()
             pg = self._build_pipet(dummy_gcode)
 
@@ -567,10 +523,8 @@ class PipetGuiWindow(QMainWindow):
             pg = self._build_pipet(out_path)
             ix = InputXlsx(pipet=pg).load(xlsx_path)
 
-            ix.generate_gcode(
-                do_home=self.chk_home.isChecked(),
-                do_finish=self.chk_finish.isChecked(),
-            )
+            # Use your defaults (do_home=True, do_finish=True)
+            ix.generate_gcode()
 
             self._log(f"[OK] G-code written: {out_path}")
             QMessageBox.information(self, "Done", f"G-code saved:\n{out_path}")

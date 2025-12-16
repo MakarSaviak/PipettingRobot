@@ -372,6 +372,25 @@ class InputXlsx(BaseModel):
                     mapping.append(sid)
         return mapping
 
+    def _split_volume_ul(self, total_ul: float, max_ul: float, *, eps: float = 1e-9) -> list[float]:
+        """Split total volume into chunks <= max_ul."""
+        if total_ul <= 0:
+            raise ValueError(f"volume_uL must be > 0, got {total_ul}")
+        if max_ul <= 0:
+            raise ValueError(f"max_volume_ul must be > 0, got {max_ul}")
+
+        parts: list[float] = []
+        remaining = float(total_ul)
+
+        while remaining > max_ul + eps:
+            parts.append(float(max_ul))
+            remaining -= float(max_ul)
+
+        if remaining > eps:
+            parts.append(float(remaining))
+
+        return parts
+
     def generate_gcode(self, *, do_home: bool = True, do_finish: bool = True, **g_kwargs: Any) -> Path:
         """Read the workbook program and emit gcode using the provided PipetG."""
         if self.wb is None:
@@ -382,7 +401,17 @@ class InputXlsx(BaseModel):
         def _is_empty(v: Any) -> bool:
             return v is None or (isinstance(v, str) and v.strip() == "")
 
-        def run(pg: PipetG) -> None:
+        pg = self.pipet
+
+        started_here = False
+        if getattr(pg, "g", None) is None:
+            pg.start(**g_kwargs)
+            started_here = True
+
+        try:
+            # now pg.max_volume_ul is available
+            max_ul = float(pg.max_volume_ul)  # type: ignore[arg-type]
+
             if do_home:
                 pg.home()
 
@@ -398,13 +427,13 @@ class InputXlsx(BaseModel):
                     vial_cell = ws.cell(row=r, column=1)
                     vol_cell = ws.cell(row=r, column=2)
                     sidx_cell = ws.cell(row=r, column=3)
-                    flush_cell = ws.cell(row=r, column=4)
+                    flush_cell = ws.cell(row=r, column=4)  # optional flush column
 
                     volume_val = vol_cell.value
                     sidx_raw = sidx_cell.value
                     flush_raw = flush_cell.value
 
-                    # skip if user didn't specify anything in this row
+                    # skip empty instruction row
                     if _is_empty(volume_val) and _is_empty(sidx_raw) and _is_empty(flush_raw):
                         continue
 
@@ -418,8 +447,10 @@ class InputXlsx(BaseModel):
                     if _is_empty(volume_val):
                         raise ValueError(f"{rack.name}_vials!{vol_cell.coordinate}: volume_uL is empty.")
 
-                    volume_ul = float(volume_val)
+                    volume_ul_total = float(volume_val)
+                    chunks = self._split_volume_ul(volume_ul_total, max_ul)
 
+                    # 1-based -> 0-based (global indices)
                     vial_idx0 = vial_index - 1
                     solvent_idx0 = solvent_index - 1
 
@@ -431,55 +462,59 @@ class InputXlsx(BaseModel):
                     dispense_solvent_id = solvent_id_map[solvent_idx0]
                     if dispense_solvent_id is None:
                         raise ValueError(
-                            f"{rack.name}_vials row {r}: solvent_index={solvent_index} has no solvent_id assigned "
-                            f"in solvent grids."
+                            f"{rack.name}_vials row {r}: solvent_index={solvent_index} has no solvent_id assigned in solvent grids."
                         )
 
-                    # --- NEW: flush spec ---
+                    # flush spec: None / False / True / int(k>=1)
                     spec = self._parse_flush_spec(flush_raw, where=f"{rack.name}_vials!{flush_cell.coordinate}")
 
-                    # Determine flush solvent (if any), then flush once with *volume_ul*
+                    # decide flush solvent idx/id (if any)
+                    flush_idx0: int | None = None
+                    flush_solvent_id: int | None = None
+
                     if spec is True:
-                        # flush with the SAME solvent as dispense
-                        pg.flush(
-                            volume_ul=volume_ul,
-                            repeats=1,
-                            solvent_idx=solvent_idx0,
-                            solvent_id=int(dispense_solvent_id),
-                        )
+                        flush_idx0 = solvent_idx0
+                        flush_solvent_id = int(dispense_solvent_id)
                     elif isinstance(spec, int):
-                        # flush with a DIFFERENT solvent index (global)
                         flush_idx0 = spec - 1
                         if not (0 <= flush_idx0 < len(solvent_id_map)):
                             raise ValueError(
                                 f"{rack.name}_vials!{flush_cell.coordinate}: flush solvent_index={spec} out of mapping range."
                             )
-                        flush_solvent_id = solvent_id_map[flush_idx0]
-                        if flush_solvent_id is None:
+                        _sid = solvent_id_map[flush_idx0]
+                        if _sid is None:
                             raise ValueError(
-                                f"{rack.name}_vials!{flush_cell.coordinate}: flush solvent_index={spec} has no solvent_id "
-                                f"assigned in solvent grids."
+                                f"{rack.name}_vials!{flush_cell.coordinate}: flush solvent_index={spec} has no solvent_id assigned in solvent grids."
                             )
+                        flush_solvent_id = int(_sid)
+
+                    # --------- NEW: split flush + split dispense ----------
+                    # flush only ONCE per row, and never more than max_volume_ul per repeat
+                    if flush_idx0 is not None and flush_solvent_id is not None:
+                        flush_vol = min(volume_ul_total, max_ul)
                         pg.flush(
-                            volume_ul=volume_ul,
+                            volume_ul=flush_vol,
                             repeats=1,
                             solvent_idx=flush_idx0,
-                            solvent_id=int(flush_solvent_id),
+                            solvent_id=flush_solvent_id,
                         )
-                    # spec is None/False/0 -> no flush
 
-                    # dispense step (no extra flush inside)
-                    pg.process_vial(
-                        vial_idx=vial_idx0,
-                        solvent_idx=solvent_idx0,
-                        solvent_id=int(dispense_solvent_id),
-                        volume_ul=volume_ul,
-                        slow=False,
-                        flush_repeats=0,
-                    )
+                    # dispense total amount (chunked)
+                    for v_chunk in chunks:
+                        pg.process_vial(
+                            vial_idx=vial_idx0,
+                            solvent_idx=solvent_idx0,
+                            solvent_id=int(dispense_solvent_id),
+                            volume_ul=v_chunk,
+                            slow=False,
+                            flush_repeats=0,
+                        )
 
             if do_finish:
                 pg.finish()
 
-        run(self.pipet)
-        return Path(self.pipet.outfile)
+            return Path(pg.outfile)
+
+        finally:
+            if started_here:
+                pg.stop()

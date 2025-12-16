@@ -42,8 +42,10 @@ class InputXlsx(BaseModel):
         n_rows = int(rack.solvent_rows)
         n_cols = int(rack.solvent_columns)
 
+        # kept (even if not used yet)
         dx = float(rack.solvent_dx or 0.0)
         dy = float(rack.solvent_dy or 0.0)
+        _ = (dx, dy)
 
         fill = PatternFill("solid", fgColor="FFF2CC")  # light orange
         thin = Side(style="thin")
@@ -81,7 +83,7 @@ class InputXlsx(BaseModel):
         align = Alignment(horizontal="center", vertical="center")
         white = PatternFill("solid", fgColor="FFFFFF")
 
-        # --- vial grid with global vial indices (not editable meaningfully, but you can overwrite) ---
+        # --- vial grid with global vial indices ---
         idx = start_index
         for col in range(n_cols):
             for row in range(n_rows):
@@ -100,17 +102,19 @@ class InputXlsx(BaseModel):
                 if cell.fill is None or cell.fill.patternType is None:
                     cell.fill = white
 
-        # --- program table below: A=index, B=volume_uL, C=solvent_index ---
+        # --- program table below: A=index, B=volume_uL, C=solvent_index, D=flush (optional) ---
         table_top = n_rows + 2
         ws.cell(row=table_top, column=1, value="index").border = border
         ws.cell(row=table_top, column=2, value="volume_uL").border = border
         ws.cell(row=table_top, column=3, value="solvent_index").border = border
+        ws.cell(row=table_top, column=4, value="flush").border = border  # NEW
 
         for i in range(n):
             r = table_top + 1 + i
             ws.cell(row=r, column=1, value=start_index + i).border = border
             ws.cell(row=r, column=2, value=None).border = border
             ws.cell(row=r, column=3, value=None).border = border
+            ws.cell(row=r, column=4, value=None).border = border  # NEW (optional)
 
         ws.freeze_panes = "A1"
         return start_index + n
@@ -188,6 +192,31 @@ class InputXlsx(BaseModel):
             raise ValueError(f"{where}: expected integer, got '{v}'")
         raise ValueError(f"{where}: unsupported type {type(v).__name__}")
 
+    def _as_bool(self, v: Any, *, where: str) -> bool | None:
+        """Parse Excel-ish booleans. Returns None for empty."""
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return v
+        if isinstance(v, int):
+            if v in (0, 1):
+                return bool(v)
+            raise ValueError(f"{where}: expected 0/1 for bool, got int {v}")
+        if isinstance(v, float):
+            if v.is_integer() and int(v) in (0, 1):
+                return bool(int(v))
+            raise ValueError(f"{where}: expected 0/1 for bool, got float {v}")
+        if isinstance(v, str):
+            s = v.strip().lower()
+            if s == "":
+                return None
+            if s in {"true", "t", "yes", "y", "1"}:
+                return True
+            if s in {"false", "f", "no", "n", "0"}:
+                return False
+            raise ValueError(f"{where}: cannot parse '{v}' as boolean")
+        raise ValueError(f"{where}: unsupported type {type(v).__name__} for boolean")
+
     def _allowed_solvent_ids(self) -> set[int]:
         ids = []
         for s in self.pipet.setup.solvents:
@@ -217,12 +246,12 @@ class InputXlsx(BaseModel):
                     r = 1 + row
                     c = 1 + col
                     val = ws.cell(row=r, column=c).value
-                    sid = self._as_int(val, where=f"{name}!{ws.cell(r,c).coordinate}")
+                    sid = self._as_int(val, where=f"{name}!{ws.cell(r, c).coordinate}")
                     if sid is None:
                         continue
                     if sid not in allowed:
                         raise ValueError(
-                            f"{name}!{ws.cell(r,c).coordinate}: solvent_id={sid} not in setup.solvents ids={sorted(allowed)}"
+                            f"{name}!{ws.cell(r, c).coordinate}: solvent_id={sid} not in setup.solvents ids={sorted(allowed)}"
                         )
 
     def _validate_vial_solvent_idx_bounds_impl(self) -> None:
@@ -243,15 +272,19 @@ class InputXlsx(BaseModel):
             # data rows: table_top+1 .. table_top+n
             for i in range(n):
                 r = table_top + 1 + i
-                cell = ws.cell(row=r, column=3)  # solvent_index column
-                sval = cell.value
-                sidx = self._as_int(sval, where=f"{name}!{cell.coordinate}")
-                if sidx is None:
-                    continue
-                if not (1 <= sidx <= total_slots):
-                    raise ValueError(
-                        f"{name}!{cell.coordinate}: solvent_index={sidx} out of bounds (allowed 1..{total_slots})"
-                    )
+
+                # solvent_index column
+                s_cell = ws.cell(row=r, column=3)
+                sidx = self._as_int(s_cell.value, where=f"{name}!{s_cell.coordinate}")
+                if sidx is not None:
+                    if not (1 <= sidx <= total_slots):
+                        raise ValueError(
+                            f"{name}!{s_cell.coordinate}: solvent_index={sidx} out of bounds (allowed 1..{total_slots})"
+                        )
+
+                # flush column (optional) — just validate it's parseable if filled
+                f_cell = ws.cell(row=r, column=4)
+                _ = self._as_bool(f_cell.value, where=f"{name}!{f_cell.coordinate}")
 
     # ------------------------------------------------------------------
     # G-code generation
@@ -305,17 +338,20 @@ class InputXlsx(BaseModel):
                     vial_cell = ws.cell(row=r, column=1)
                     vol_cell = ws.cell(row=r, column=2)
                     sidx_cell = ws.cell(row=r, column=3)
+                    flush_cell = ws.cell(row=r, column=4)  # NEW
 
                     volume_val = vol_cell.value
                     sidx_raw = sidx_cell.value
+                    flush_raw = flush_cell.value
 
                     # ✅ user didn't specify an instruction -> skip
                     # (vial_index is always filled, so don't require it to be empty)
-                    if _is_empty(volume_val) and _is_empty(sidx_raw):
+                    if _is_empty(volume_val) and _is_empty(sidx_raw) and _is_empty(flush_raw):
                         continue
 
                     vial_index = self._as_int(vial_cell.value, where=f"{rack.name}_vials!{vial_cell.coordinate}")
                     solvent_index = self._as_int(sidx_raw, where=f"{rack.name}_vials!{sidx_cell.coordinate}")
+                    flush_flag = self._as_bool(flush_raw, where=f"{rack.name}_vials!{flush_cell.coordinate}") or False
 
                     # partial row -> error
                     if vial_index is None:
@@ -349,7 +385,7 @@ class InputXlsx(BaseModel):
                         solvent_id=int(solvent_id),
                         volume_ul=volume_ul,
                         slow=False,
-                        flush_repeats=0,
+                        flush_repeats=1 if flush_flag else 0,  # ✅ NEW
                     )
 
             if do_finish:

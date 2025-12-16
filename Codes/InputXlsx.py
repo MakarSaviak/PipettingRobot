@@ -21,7 +21,7 @@ class InputXlsx(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True, validate_assignment=True)
 
     # ---------- template creation ----------
-    def create_empty_table(self, out_path: Path) -> Path:
+    def create_empty_table(self, out_path: Path, *, stages: int = 3) -> Path:
         wb = Workbook()
         wb.remove(wb.active)
 
@@ -30,7 +30,7 @@ class InputXlsx(BaseModel):
 
         for rack in self.pipet.setup.racks:
             solvent_start_idx = self._write_solvent_sheet(wb, rack, solvent_start_idx)
-            vial_start_idx = self._write_vial_sheet(wb, rack, vial_start_idx)
+            vial_start_idx = self._write_vial_sheet(wb, rack, vial_start_idx, stages=stages)
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
         wb.save(out_path)
@@ -69,7 +69,7 @@ class InputXlsx(BaseModel):
         ws.freeze_panes = "A1"
         return start_index + (n_rows * n_cols)
 
-    def _write_vial_sheet(self, wb: Workbook, rack, start_index: int) -> int:
+    def _write_vial_sheet(self, wb: Workbook, rack, start_index: int, *, stages: int = 3) -> int:
         ws = wb.create_sheet(f"{rack.name}_vials")
 
         n_rows = int(rack.vial_rows)
@@ -101,19 +101,29 @@ class InputXlsx(BaseModel):
                 if cell.fill is None or cell.fill.patternType is None:
                     cell.fill = white
 
-        # --- program table below: A=index, B=volume_uL, C=solvent_index, D=flush (optional) ---
+        # --- program table below: A=index, then (volume_uL, solvent_index, flush)*stages ---
         table_top = n_rows + 2
         ws.cell(row=table_top, column=1, value="index").border = border
-        ws.cell(row=table_top, column=2, value="volume_uL").border = border
-        ws.cell(row=table_top, column=3, value="solvent_index").border = border
-        ws.cell(row=table_top, column=4, value="flush").border = border
 
+        # headers for stages
+        col = 2
+        for _stage in range(stages):
+            ws.cell(row=table_top, column=col + 0, value="volume_uL").border = border
+            ws.cell(row=table_top, column=col + 1, value="solvent_index").border = border
+            ws.cell(row=table_top, column=col + 2, value="flush").border = border
+            col += 3
+
+        # rows
         for i in range(n):
             r = table_top + 1 + i
             ws.cell(row=r, column=1, value=start_index + i).border = border
-            ws.cell(row=r, column=2, value=None).border = border
-            ws.cell(row=r, column=3, value=None).border = border
-            ws.cell(row=r, column=4, value=None).border = border
+
+            col = 2
+            for _stage in range(stages):
+                ws.cell(row=r, column=col + 0, value=None).border = border
+                ws.cell(row=r, column=col + 1, value=None).border = border
+                ws.cell(row=r, column=col + 2, value=None).border = border
+                col += 3
 
         ws.freeze_panes = "A1"
         return start_index + n

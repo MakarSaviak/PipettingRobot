@@ -10,8 +10,8 @@ from .Machine import Machine
 from .PipetG import PipetG  # wherever you put it
 from .InputXlsx import InputXlsx
 
-def main():
-    # assume you already created `setup` (loaded from json/db/etc.)
+
+def creat_PipetG(out_name):
     create_db_and_tables()
 
     syringes = [Syringe.get_by_id(1)]
@@ -34,66 +34,33 @@ def main():
 
     syringe_id = 1
 
-    # map solvent_idx -> solvent_id (DB id)
-    # this assumes setup.solvents order matches your solvent grid order
-    solvent_ids = [s.id for s in setup.solvents]
-    if any(x is None for x in solvent_ids):
-        raise ValueError("Some solvents in setup have id=None; cannot use solvent_id.")
-    solvent_ids = [int(x) for x in solvent_ids]
-
-    out = Path("G-codes/test_run.gcode")
-    out_excel = Path("csv/test_run.xlsx")
+    out = Path(f"G-codes/{out_name}.gcode")
     pg = PipetG(outfile=out, setup=setup, syringe_id=syringe_id)
-    excel = InputXlsx(pipet=pg)
+    pg.start()
+
+    return pg
+
+
+def get_empty_table(excel: InputXlsx, out_excel: Path):
     excel.create_empty_table(out_excel)
 
-        # pg.home()
-        #
-        # # ---- prime/flush with solvent #0 into waste ----
-        # pg.flush(
-        #     volume_ul=200.0,
-        #     repeats=2,
-        #     solvent_idx=0,
-        #     solvent_id=solvent_ids[0],
-        # )
-        #
-        # # ---- fill first 5 vials with solvent #0 ----
-        # for vial_idx in range(0, 5):
-        #     pg.process_vial(
-        #         vial_idx=vial_idx,
-        #         solvent_idx=0,
-        #         solvent_id=solvent_ids[0],
-        #         volume_ul=100,
-        #         slow=False,
-        #         flush_repeats=0,
-        #     )
-        # vial_idx=5
-        # pg.process_vial(
-        #     vial_idx=vial_idx,
-        #     solvent_idx=1,
-        #     solvent_id=solvent_ids[1],
-        #     volume_ul=250,
-        #     slow=True,  # demo: slow dispense
-        #     flush_repeats=1,  # demo: flush once before dispensing
-        # )
-        # # ---- fill next 4 vials with solvent #2 ----
-        # pg.flush(
-        #     volume_ul=500.0,
-        #     repeats=2,
-        #     solvent_idx=2,
-        #     solvent_id=solvent_ids[2],
-        # )
-        # for vial_idx in range(6, 10):
-        #     pg.process_vial(
-        #         vial_idx=vial_idx,
-        #         solvent_idx=2,
-        #         solvent_id=solvent_ids[2],
-        #         volume_ul=500.0,
-        #         slow=True,
-        #         flush_repeats=0,
-        #     )
-        #
-        # pg.finish()
+def gcode(excel, out_excel, pg):
+    excel.load(out_excel)
+    try:
+        excel.generate_gcode()
+    finally:
+        pg.stop()
+
+
+def main():
+    out_name = "test_run"
+    pg = creat_PipetG(out_name)
+
+    out_excel = Path(f"csv/{out_name}.xlsx")
+    excel = InputXlsx(pipet=pg)
+    #gcode(excel, out_excel, pg)
+    get_empty_table(excel, out_excel)
+
 
 if __name__ == "__main__":
     main()

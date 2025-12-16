@@ -1,0 +1,17 @@
+{
+  "name": "counterion-96",
+  "vial1_x": 0.0,
+  "vial1_y": 0.0,
+  "vial_dy": 10.0,
+  "vial_dx": 10.0,
+  "vial_rows": 6,
+  "vial_columns": 16,
+  "solvent1_x": 100.0,
+  "solvent1_y": 7.5,
+  "solvent_rows": 6,
+  "solvent_columns": 16,
+  "solvent_dy": 10.0,
+  "solvent_dx": 10.0,
+  "waste_x": 100.0,
+  "waste_y": 110.0
+}

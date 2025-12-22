@@ -1,4 +1,4 @@
-from pydantic import BaseModel, PositiveFloat, PositiveInt, NonNegativeFloat
+from pydantic import BaseModel, PositiveFloat, PositiveInt, NonNegativeFloat, Field
 import numpy as np
 from typing import Literal
 
@@ -13,6 +13,7 @@ class Rack(BaseModel):
     vial_dx: NonNegativeFloat
     vial_rows: PositiveInt  # I think they mean the number of rows
     vial_columns: PositiveInt  # The number of vial_columns
+    z_min_vials: float | None = Field(default=None)
 
     solvent1_x: NonNegativeFloat
     solvent1_y: NonNegativeFloat
@@ -20,6 +21,7 @@ class Rack(BaseModel):
     solvent_columns: PositiveInt
     solvent_dy: PositiveFloat | None
     solvent_dx: PositiveFloat | None
+    z_min_solvent: float | None = Field(default=None)
 
     waste_x: NonNegativeFloat
     waste_y: NonNegativeFloat
@@ -59,22 +61,24 @@ class Rack(BaseModel):
 if __name__ == "__main__":
     # python -m Codes.Rack
     rack_data2 = {
-        "name": "counterion-96_EDIT-THIS",
-        "vial1_x": 0,
-        "vial1_y": 0,
-        "solvent1_x": 100,
+        "name": "GC-10-3_3-1",
+        "vial1_x": 180.0,
+        "vial1_y": 0.0,
+        "vial_dy": 15.0,
+        "vial_dx": 15.0,
+        "vial_rows": 10,
+        "vial_columns": 3,
+        "solvent1_x": 235.0,
         "solvent1_y": 7.5,
-        "waste_x": 100,
-        "waste_y": 110,
-        "vial_dy": 10,
-        "vial_dx": 10,
-        "vial_rows": 6,
-        "vial_columns": 16,
-        "solvent_rows": 6,
-        "solvent_columns": 16,
-        "solvent_dy": 10,
-        "solvent_dx": 10
+        "solvent_rows": 3,
+        "solvent_columns": 1,
+        "solvent_dy": 35.0,
+        "solvent_dx": None,
+        "waste_x": 235.0,
+        "waste_y": 110.0
     }
     rack2 = Rack.model_validate(rack_data2)
 
-    save_model(rack2, "counterion-96_EDIT-THIS")
+    print(rack2.z_min_vials)
+
+    save_model(rack2, "GC-10-3_3-1")

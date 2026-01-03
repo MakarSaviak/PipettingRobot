@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+
+# Codex workspace
+Codex/
+
+# Generated outputs
+G-codes/*.gcode
+csv/*.xlsx
+
+# IDE (PyCharm)
+.idea/

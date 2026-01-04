@@ -6,14 +6,14 @@
   "vial_dx": 10.0,
   "vial_rows": 6,
   "vial_columns": 16,
-  "z_min_vials": null,
+  "z_min_vials": 45,
   "solvent1_x": 100.0,
   "solvent1_y": 7.5,
   "solvent_rows": 6,
   "solvent_columns": 16,
   "solvent_dy": 10.0,
   "solvent_dx": 10.0,
-  "z_min_solvents": null,
+  "z_min_solvents": 45,
   "waste_x": 100.0,
   "waste_y": 110.0
 }

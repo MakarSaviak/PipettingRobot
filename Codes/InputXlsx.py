@@ -14,7 +14,6 @@ from .PipetG import PipetG
 class InputXlsx(BaseModel):
     pipet: PipetG
 
-    # runtime-only
     xlsx_path: Path | None = Field(default=None, exclude=True, repr=False)
     wb: Workbook | None = Field(default=None, exclude=True, repr=False)
 
@@ -41,23 +40,16 @@ class InputXlsx(BaseModel):
 
         n_rows = int(rack.solvent_rows)
         n_cols = int(rack.solvent_columns)
-
-        dx = float(rack.solvent_dx or 0.0)
-        dy = float(rack.solvent_dy or 0.0)
-        _ = (dx, dy)
-
+        # Table Design Formatting
         fill = PatternFill("solid", fgColor="FFF2CC")  # light orange
         thin = Side(style="thin")
         border = Border(left=thin, right=thin, top=thin, bottom=thin)
         align = Alignment(horizontal="center", vertical="center")
 
         idx = start_index
-        for col in range(n_cols):
-            for row in range(n_rows):
-                r = 1 + row
-                c = 1 + col
-
-                cell = ws.cell(row=r, column=c, value=None)  # user writes solvent_id here
+        for col in range(1, n_cols + 1):
+            for row in range(1, n_rows + 1):
+                cell = ws.cell(row=row, column=col, value=None)  # user writes solvent_id here
                 cell.fill = fill
                 cell.border = border
                 cell.alignment = align
@@ -84,11 +76,9 @@ class InputXlsx(BaseModel):
 
         # --- vial grid with global vial indices ---
         idx = start_index
-        for col in range(n_cols):
-            for row in range(n_rows):
-                r = 1 + row
-                c = 1 + col
-                cell = ws.cell(row=r, column=c, value=idx)
+        for col in range(1, n_cols + 1):
+            for row in range(1, n_rows + 1):
+                cell = ws.cell(row=row, column=col, value=idx)
                 cell.fill = fill
                 cell.border = border
                 cell.alignment = align

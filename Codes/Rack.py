@@ -21,7 +21,7 @@ class Rack(BaseModel):
     solvent_columns: PositiveInt
     solvent_dy: PositiveFloat | None
     solvent_dx: PositiveFloat | None
-    z_min_solvent: float | None = Field(default=None)
+    z_min_solvents: float | None = Field(default=None)
 
     waste_x: NonNegativeFloat
     waste_y: NonNegativeFloat
@@ -79,6 +79,6 @@ if __name__ == "__main__":
     }
     rack2 = Rack.model_validate(rack_data2)
 
-    print(rack2.z_min_vials)
-
-    save_model(rack2, "GC-10-3_3-1")
+    # print(rack2.z_min_vials)
+    print(rack2.positions_vial)
+    # save_model(rack2, "GC-10-3_3-1")

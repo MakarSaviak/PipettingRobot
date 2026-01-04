@@ -5,31 +5,31 @@ class Machine(BaseModel):
     z_min_limit: float = Field(..., description="Lowest allowed Z (mm) for this machine instance")
     z_max_limit: float = Field(..., description="Highest allowed Z (mm) for this machine instance")
 
-    Z_min: float # 25
-    Z_max: float # 75
-    Z_slow: float # 35
+    z_min: float # 25
+    z_max: float # 75
+    z_slow: float # 35
     Fz: PositiveFloat
     Fxy: PositiveFloat
     Fa_push: PositiveFloat
     Fa_push_slow: PositiveFloat
     Fa_pull: PositiveFloat
-    Rest_x: PositiveFloat
-    Rest_y: PositiveFloat
+    rest_x: PositiveFloat
+    rest_y: PositiveFloat
 
     # Re-validate on assignment so updates are also checked
     model_config = ConfigDict(validate_assignment=True)
 
     @model_validator(mode="after")
     def _bounds_and_consistency_checks(self):
-        if self.Z_min > self.Z_max:
+        if self.z_min > self.z_max:
             raise ValueError("Z_min must be < Z_max")
         if self.z_min_limit >= self.z_max_limit:
             raise ValueError("z_min_limit must be < z_max_limit")
-        if not (self.z_min_limit <= self.Z_min <= self.Z_max <= self.z_max_limit):
+        if not (self.z_min_limit <= self.z_min <= self.z_max <= self.z_max_limit):
             raise ValueError(
                 f"Z bounds invalid: require {self.z_min_limit} <= Z_min <= Z_max <= {self.z_max_limit}"
             )
-        if not (self.Z_min <= self.Z_slow <= self.Z_max):
+        if not (self.z_min <= self.z_slow <= self.z_max):
             raise ValueError("Z_slow must be between Z_min and Z_max")
         return self
 

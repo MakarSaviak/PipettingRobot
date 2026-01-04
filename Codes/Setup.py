@@ -68,6 +68,25 @@ class Setup(BaseModel):
 
         return self
 
+    @model_validator(mode="after")
+    def z_min_validation(self) -> "Setup":
+        for rack in self.racks:
+            vial_z_min = self.machine.z_min if rack.z_min_vials is None else rack.z_min_vials
+            if not (self.machine.z_min_limit <= vial_z_min <= self.machine.z_max_limit):
+                raise ValueError(
+                    f"Rack '{rack.name}' z_min_vials={vial_z_min} out of bounds: "
+                    f"allowed {self.machine.z_min_limit}..{self.machine.z_max_limit}"
+                )
+
+            solvent_z_min = self.machine.z_min if rack.z_min_solvents is None else rack.z_min_solvents
+            if not (self.machine.z_min_limit <= solvent_z_min <= self.machine.z_max_limit):
+                raise ValueError(
+                    f"Rack '{rack.name}' z_min_solvents={solvent_z_min} out of bounds: "
+                    f"allowed {self.machine.z_min_limit}..{self.machine.z_max_limit}"
+                )
+
+        return self
+
     def get_rack(self, name: str) -> Rack | None:
         return next((r for r in self.racks if r.name == name), None)
 
@@ -85,6 +104,22 @@ class Setup(BaseModel):
         # concatenates rack.positions_solvent in self.racks order
         return list(chain.from_iterable(r.positions_solvent for r in self.racks))
 
+    @property
+    def z_min_vials(self) -> list[float]:
+        z_min_values: list[float] = []
+        for rack in self.racks:
+            rack_z_min = self.machine.z_min if rack.z_min_vials is None else rack.z_min_vials
+            z_min_values.extend([rack_z_min] * len(rack.positions_vial))
+        return z_min_values
+
+    @property
+    def z_min_solvents(self) -> list[float]:
+        z_min_values: list[float] = []
+        for rack in self.racks:
+            rack_z_min = self.machine.z_min if rack.z_min_solvents is None else rack.z_min_solvents
+            z_min_values.extend([rack_z_min] * len(rack.positions_solvent))
+        return z_min_values
+
 
 if __name__ == "__main__":
     create_db_and_tables()
@@ -92,8 +127,8 @@ if __name__ == "__main__":
     syringes = [Syringe.get_by_id(1)]
     solvents = Solvent.get_all()
 
-    rack1 = load_model(Rack, "GC-10-by-3_Solvent-20ml-3-by-1")
-    rack2 = load_model(Rack, "counterion-96_EDIT-THIS")
+    rack1 = load_model(Rack, "GC-10-3_3-1")
+    rack2 = load_model(Rack, "counterion-96")
     racks = [rack1, rack2]
 
     machine = load_model(Machine, "current")
@@ -106,3 +141,7 @@ if __name__ == "__main__":
         "machine": machine
     }
     setup = Setup.model_validate(setup_data)
+    z_min_vials = setup.z_min_vials
+    z_min_solvents = setup.z_min_solvents
+    print("z_min_vials: ", z_min_vials)
+    print("z_min_solvents: ", z_min_solvents)

@@ -13,7 +13,7 @@
   "solvent_columns": 16,
   "solvent_dy": 10.0,
   "solvent_dx": 10.0,
-  "z_min_solvent": null,
+  "z_min_solvents": null,
   "waste_x": 100.0,
   "waste_y": 110.0
 }

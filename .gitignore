@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 
 # Codex workspace
-Codex/
+#Codex/
 
 # Generated outputs
 G-codes/*.gcode

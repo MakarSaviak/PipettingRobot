@@ -6,7 +6,7 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
-from openpyxl.styles import PatternFill, Border, Side, Alignment
+from openpyxl.styles import PatternFill, Border, Side, Alignment, NamedStyle
 
 from .PipetG import PipetG
 
@@ -41,24 +41,23 @@ class InputXlsx(BaseModel):
         n_rows = int(rack.solvent_rows)
         n_cols = int(rack.solvent_columns)
         # Table Design Formatting
-        fill = PatternFill("solid", fgColor="FFF2CC")  # light orange
-        thin = Side(style="thin")
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        align = Alignment(horizontal="center", vertical="center")
+        style_name = "solvent_cell"
+        if style_name not in wb.named_styles:
+            solvent_style = NamedStyle(name=style_name)
+            solvent_style.fill = PatternFill("solid", fgColor="FFF2CC")  # light orange
+            thin = Side(style="thin")
+            solvent_style.border = Border(left=thin, right=thin, top=thin, bottom=thin)
+            solvent_style.alignment = Alignment(horizontal="center", vertical="center")
+            wb.add_named_style(solvent_style)
 
         idx = start_index
         for col in range(1, n_cols + 1):
             for row in range(1, n_rows + 1):
                 cell = ws.cell(row=row, column=col, value=None)  # user writes solvent_id here
-                cell.fill = fill
-                cell.border = border
-                cell.alignment = align
-
-                # comment shows global solvent-slot index
-                cell.comment = Comment(f"{idx}", "index")
+                cell.style = style_name
+                cell.comment = Comment(f"{idx}", "index") # comment shows global solvent-slot index
                 idx += 1
 
-        ws.freeze_panes = "A1"
         return start_index + (n_rows * n_cols)
 
     def _write_vial_sheet(self, wb: Workbook, rack, start_index: int, *, stages: int = 3) -> int:

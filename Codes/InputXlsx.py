@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+from itertools import chain
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from openpyxl import Workbook, load_workbook
@@ -9,6 +10,15 @@ from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill, Border, Side, Alignment, NamedStyle
 
 from .PipetG import PipetG
+
+# --- Table Design Constants ---
+THIN_SIDE = Side(style="thin")
+GRID_BORDER = Border(left=THIN_SIDE, right=THIN_SIDE, top=THIN_SIDE, bottom=THIN_SIDE)
+CENTER_ALIGN = Alignment(horizontal="center", vertical="center")
+# --- Colors ---
+LIGHT_ORANGE = PatternFill("solid", fgColor="FFF2CC")
+LIGHT_BLUE = PatternFill("solid", fgColor="DDEBF7")
+WHITE = PatternFill("solid", fgColor="FFFFFF")
 
 
 class InputXlsx(BaseModel):
@@ -40,21 +50,16 @@ class InputXlsx(BaseModel):
 
         n_rows = int(rack.solvent_rows)
         n_cols = int(rack.solvent_columns)
-        # Table Design Formatting
-        style_name = "solvent_cell"
-        if style_name not in wb.named_styles:
-            solvent_style = NamedStyle(name=style_name)
-            solvent_style.fill = PatternFill("solid", fgColor="FFF2CC")  # light orange
-            thin = Side(style="thin")
-            solvent_style.border = Border(left=thin, right=thin, top=thin, bottom=thin)
-            solvent_style.alignment = Alignment(horizontal="center", vertical="center")
-            wb.add_named_style(solvent_style)
 
         idx = start_index
         for col in range(1, n_cols + 1):
             for row in range(1, n_rows + 1):
                 cell = ws.cell(row=row, column=col, value=None)  # user writes solvent_id here
-                cell.style = style_name
+
+                cell.fill = LIGHT_ORANGE
+                cell.border = GRID_BORDER
+                cell.alignment = CENTER_ALIGN
+
                 cell.comment = Comment(f"{idx}", "index") # comment shows global solvent-slot index
                 idx += 1
 
@@ -65,56 +70,52 @@ class InputXlsx(BaseModel):
 
         n_rows = int(rack.vial_rows)
         n_cols = int(rack.vial_columns)
-        n = n_rows * n_cols
-
-        fill = PatternFill("solid", fgColor="DDEBF7")  # light blue
-        thin = Side(style="thin")
-        border = Border(left=thin, right=thin, top=thin, bottom=thin)
-        align = Alignment(horizontal="center", vertical="center")
-        white = PatternFill("solid", fgColor="FFFFFF")
+        n = n_rows * n_cols # total number of vials
 
         # --- vial grid with global vial indices ---
         idx = start_index
         for col in range(1, n_cols + 1):
             for row in range(1, n_rows + 1):
                 cell = ws.cell(row=row, column=col, value=idx)
-                cell.fill = fill
-                cell.border = border
-                cell.alignment = align
+                cell.fill = LIGHT_BLUE
+                cell.border = GRID_BORDER
+                cell.alignment = CENTER_ALIGN
                 idx += 1
 
-        # make the rest of the visible region clean white (prevents “dirty white”)
-        for r in range(1, n_rows + 20):
-            for c in range(1, n_cols + 10):
-                cell = ws.cell(row=r, column=c)
-                if cell.fill is None or cell.fill.patternType is None:
-                    cell.fill = white
+        # make the rest of the visible region clean white
+        table_top = n_rows + 2
+
+        rows = chain(ws.iter_rows(min_row=1, max_row=n_rows + 1, min_col=1, max_col=37),
+            ws.iter_rows(min_row=table_top + n + 1, max_row=table_top + n + 30, min_col=1, max_col=37))
+        for row in rows:
+            for cell in row:
+                cell.fill = WHITE
 
         # --- program table below: A=index, then (volume_uL, solvent_index, flush)*stages ---
-        table_top = n_rows + 2
-        ws.cell(row=table_top, column=1, value="index").border = border
-
+        for cell in ws[f"A{table_top}:J{table_top}"][0]:
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = GRID_BORDER
+        ws.row_dimensions[table_top].height = 30
         # headers for stages
-        col = 2
-        for _stage in range(stages):
-            ws.cell(row=table_top, column=col + 0, value="volume_uL").border = border
-            ws.cell(row=table_top, column=col + 1, value="solvent_index").border = border
-            ws.cell(row=table_top, column=col + 2, value="flush").border = border
-            col += 3
+        ws.cell(row=table_top, column=1, value="index") # the vial index header
+
+        for col in range(2, 2 + 3 * stages, 3): # range(start, end, stepsize)
+            ws.cell(row=table_top, column=col, value="volume\nµL")
+            ws.cell(row=table_top, column=col + 1, value="solvent\nindex")
+            ws.cell(row=table_top, column=col + 2, value="flush")
 
         # rows
         for i in range(n):
             r = table_top + 1 + i
-            ws.cell(row=r, column=1, value=start_index + i).border = border
+            ws.cell(row=r, column=1, value=start_index + i).border = GRID_BORDER
 
             col = 2
             for _stage in range(stages):
-                ws.cell(row=r, column=col + 0, value=None).border = border
-                ws.cell(row=r, column=col + 1, value=None).border = border
-                ws.cell(row=r, column=col + 2, value=None).border = border
+                ws.cell(row=r, column=col + 0, value=None).border = GRID_BORDER
+                ws.cell(row=r, column=col + 1, value=None).border = GRID_BORDER
+                ws.cell(row=r, column=col + 2, value=None).border = GRID_BORDER
                 col += 3
 
-        ws.freeze_panes = "A1"
         return start_index + n
 
     # ------------------------------------------------------------------

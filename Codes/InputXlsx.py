@@ -54,6 +54,11 @@ class InputXlsx(BaseModel):
         n_rows = int(rack.solvent_rows)
         n_cols = int(rack.solvent_columns)
 
+        # make the rest of the visible region white
+        for row in ws.iter_rows(min_row=1, max_row=n_rows + 40, min_col=1, max_col=37):
+            for cell in row:
+                cell.fill = WHITE
+
         idx = start_index
         for col in range(1, n_cols + 1):
             for row in range(1, n_rows + 1):

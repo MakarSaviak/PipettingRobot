@@ -230,13 +230,13 @@ class InputXlsx(BaseModel):
             raise ValueError(f"{where}: flush integer must be >=0, got {val}")
 
         if isinstance(v, int):
-            for_int(v)
+            return for_int(v)
 
         if isinstance(v, float):
             if not v.is_integer():
                 raise ValueError(f"{where}: flush must be TRUE/FALSE or an integer solvent index, got {v}")
             iv = int(v)
-            for_int(iv)
+            return for_int(iv)
 
         if isinstance(v, str):
             s = v.strip()
@@ -257,7 +257,7 @@ class InputXlsx(BaseModel):
             if not f.is_integer():
                 raise ValueError(f"{where}: flush must be TRUE/FALSE or integer solvent index, got '{v}'")
             iv = int(f)
-            for_int(iv)
+            return for_int(iv)
 
         raise ValueError(f"{where}: unsupported type {type(v).__name__} for flush")
 

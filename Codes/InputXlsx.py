@@ -513,10 +513,10 @@ class InputXlsx(BaseModel):
                         if self._is_empty(volume_val) and self._is_empty(s_idx_raw) and (flush_spec in {None, False}):
                             continue
 
-                        solvent_index = self._as_int(s_idx_raw, where=f"{sheet_name}!{s_idx_cell.coordinate}")
-                        if solvent_index is None:
+                        s_idx = self._as_int(s_idx_raw, where=f"{sheet_name}!{s_idx_cell.coordinate}")
+                        if s_idx is None:
                             raise ValueError(
-                                f"{sheet_name}!{s_idx_cell.coordinate}: solvent_index is empty "
+                                f"{sheet_name}!{s_idx_cell.coordinate}: solvent index is empty "
                                 f"(stage {stage_i})."
                             )
                         if self._is_empty(volume_val):
@@ -524,26 +524,39 @@ class InputXlsx(BaseModel):
                                 f"{sheet_name}!{vol_cell.coordinate}: volume_uL is empty "
                                 f"(stage {stage_i})."
                             )
-
-                        volume_ul_total = float(volume_val)
+                        # Handling volume value
+                        try:
+                            if isinstance(volume_val, str):
+                                v_str = volume_val.strip()
+                                if "," in v_str and "." not in v_str:
+                                    v_str = v_str.replace(",", ".")
+                                volume_ul_total = float(v_str)
+                            else:
+                                volume_ul_total = float(volume_val)
+                        except (TypeError, ValueError) as e:
+                            raise ValueError(
+                                f"{sheet_name}!{vol_cell.coordinate}: volume_uL must be a number "
+                                f"(stage {stage_i})."
+                            ) from e
                         chunks = self._split_volume_ul(volume_ul_total, max_ul)
 
                         # Excel indices are 1-based; PipetG expects 0-based indices
                         vial_idx0 = vial_index - 1
-                        solvent_idx0 = solvent_index - 1
+                        solvent_idx0 = s_idx - 1
 
                         if not (0 <= solvent_idx0 < len(solvent_id_map)):
                             raise ValueError(
-                                f"{sheet_name} row {r} stage {stage_i}: solvent_index={solvent_index} out of mapping range."
+                                f"{sheet_name} row {r} stage {stage_i}: solvent index={s_idx} out of mapping range."
                             )
 
                         dispense_solvent_id = solvent_id_map[solvent_idx0]
                         if dispense_solvent_id is None:
                             raise ValueError(
-                                f"{sheet_name} row {r} stage {stage_i}: solvent_index={solvent_index} has no solvent_id assigned in solvent grids."
+                                f"{sheet_name} row {r} stage {stage_i}: solvent index={s_idx} "
+                                f"has no solvent_id assigned in solvent grids."
                             )
 
-                        flush_idx0: int | None = None
+                        flush_idx0: int | None = None # 0-based flush index
                         flush_solvent_id: int | None = None
 
                         if flush_spec is True:
@@ -553,14 +566,16 @@ class InputXlsx(BaseModel):
                             flush_idx0 = flush_spec - 1
                             if not (0 <= flush_idx0 < len(solvent_id_map)):
                                 raise ValueError(
-                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent_index={flush_spec} out of mapping range."
+                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent index={flush_spec} "
+                                    f"out of mapping range."
                                 )
-                            _sid = solvent_id_map[flush_idx0]
-                            if _sid is None:
+                            _s_id = solvent_id_map[flush_idx0]
+                            if _s_id is None:
                                 raise ValueError(
-                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent_index={flush_spec} has no solvent_id assigned in solvent grids."
+                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent index={flush_spec} "
+                                    f"has no solvent_id assigned in solvent grids."
                                 )
-                            flush_solvent_id = int(_sid)
+                            flush_solvent_id = int(_s_id)
 
                         # flush only ONCE per stage-row, and never more than max_volume_ul per repeat
                         if flush_idx0 is not None and flush_solvent_id is not None:
@@ -573,13 +588,14 @@ class InputXlsx(BaseModel):
                             )
 
                         # dispense total amount (chunked)
+                        slow = vol_cell.fill.fill_type is not None
                         for v_chunk in chunks:
                             pg.process_vial(
                                 vial_idx=vial_idx0,
                                 solvent_idx=solvent_idx0,
                                 solvent_id=int(dispense_solvent_id),
                                 volume_ul=v_chunk,
-                                slow=False,
+                                slow=slow,
                                 flush_repeats=0,
                             )
 

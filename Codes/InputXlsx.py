@@ -7,7 +7,7 @@ from itertools import chain
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
-from openpyxl.styles import PatternFill, Border, Side, Alignment, NamedStyle
+from openpyxl.styles import PatternFill, Border, Side, Alignment, NamedStyle, Font
 
 from .PipetG import PipetG
 
@@ -19,6 +19,9 @@ CENTER_ALIGN = Alignment(horizontal="center", vertical="center")
 LIGHT_ORANGE = PatternFill("solid", fgColor="FFF2CC")
 LIGHT_BLUE = PatternFill("solid", fgColor="DDEBF7")
 WHITE = PatternFill("solid", fgColor="FFFFFF")
+HEADER_ORANGE = PatternFill("solid", fgColor="FFA62B")
+VIAL_IDX_FILL = PatternFill("solid", fgColor="16697A")
+HEADER_BOLD = Font(bold=True)
 
 
 class InputXlsx(BaseModel):
@@ -92,31 +95,34 @@ class InputXlsx(BaseModel):
                 cell.alignment = CENTER_ALIGN
                 idx += 1
 
-        # --- program table below: A=index, then (volume_uL, solvent_index, flush)*stages ---
+        # --- the program table below: A=index, then (volume_uL, solvent_index, flush)*stages ---
 
         # headers for stages
         for col in ws.iter_cols(min_row=table_top, max_row=table_top, min_col=1, max_col=header_max_col):
             for cell in col:
                 cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                cell.fill = HEADER_ORANGE
+                cell.font = HEADER_BOLD
         ws.row_dimensions[table_top].height = 30
 
         ws.cell(row=table_top, column=1, value="index") # the vial index header
+        for i in range(n):
+            r = table_top + 1 + i
+            cell = ws.cell(row=r, column=1, value=start_index + i)
+            cell.fill = VIAL_IDX_FILL
+            cell.font = Font(color="FFFFFF")
 
         for col in range(2, 1 + header_max_col, 3): # range(start, end, stepsize)
             ws.cell(row=table_top, column=col + 0, value="volume\nµL")
             ws.cell(row=table_top, column=col + 1, value="solvent\nindex")
-            ws.cell(row=table_top, column=col + 2, value="flush")
 
-        # rows
-        for i in range(n):
-            r = table_top + 1 + i
-            ws.cell(row=r, column=1, value=start_index + i).border = GRID_BORDER
-        for row in ws.iter_rows(
-            min_row=table_top,
-            max_row=table_top + n,
-            min_col=1,
-            max_col=header_max_col,
-        ):
+            ws.cell(row=table_top, column=col + 2, value="flush")
+            for i in range(n): # FALSE in every Flush cell
+                r = table_top + 1 + i
+                ws.cell(row=r, column=col + 2, value=False)
+
+        # rows and borders for the program table
+        for row in ws.iter_rows(min_row=table_top, max_row=table_top + n, min_col=1, max_col=header_max_col):
             for cell in row:
                 cell.border = GRID_BORDER
 

@@ -158,13 +158,10 @@ class InputXlsx(BaseModel):
         cls,
         xlsx_path: str | Path,
         pipet: PipetG,
-        *,
-        do_home: bool = True,
-        do_finish: bool = True,
         **g_kwargs: Any,
     ) -> Path:
         obj = cls.from_excel(xlsx_path, pipet=pipet)
-        return obj.generate_gcode(do_home=do_home, do_finish=do_finish, **g_kwargs)
+        return obj.generate_gcode(**g_kwargs)
 
     @model_validator(mode="after")
     def _validate_solvent_ids_in_solvent_grids(self) -> "InputXlsx":
@@ -200,6 +197,8 @@ class InputXlsx(BaseModel):
             s = v.strip()
             if s == "":
                 return None
+            if "," in s and "." not in s: # regional formatting 3,0 -> 3.0
+                s = s.replace(",", ".")
             try:
                 f = float(s)
             except ValueError as e:
@@ -223,28 +222,28 @@ class InputXlsx(BaseModel):
         if isinstance(v, bool):
             return v
 
-        if isinstance(v, int):
-            if v == 0:
+        def for_int(val: int):
+            if val == 0:
                 return False
-            if v >= 1:
-                return v
-            raise ValueError(f"{where}: flush integer must be >=0, got {v}")
+            if val >= 1:
+                return val
+            raise ValueError(f"{where}: flush integer must be >=0, got {val}")
+
+        if isinstance(v, int):
+            for_int(v)
 
         if isinstance(v, float):
             if not v.is_integer():
                 raise ValueError(f"{where}: flush must be TRUE/FALSE or an integer solvent index, got {v}")
             iv = int(v)
-            if iv == 0:
-                return False
-            if iv >= 1:
-                return iv
-            raise ValueError(f"{where}: flush integer must be >=0, got {iv}")
+            for_int(iv)
 
         if isinstance(v, str):
             s = v.strip()
             if s == "":
                 return None
-
+            if "," in s and "." not in s: # regional formatting 3,0 -> 3.0
+                s = s.replace(",", ".")
             s_low = s.lower()
             if s_low in {"true", "t", "yes", "y"}:
                 return True
@@ -258,11 +257,7 @@ class InputXlsx(BaseModel):
             if not f.is_integer():
                 raise ValueError(f"{where}: flush must be TRUE/FALSE or integer solvent index, got '{v}'")
             iv = int(f)
-            if iv == 0:
-                return False
-            if iv >= 1:
-                return iv
-            raise ValueError(f"{where}: flush integer must be >=0, got {iv}")
+            for_int(iv)
 
         raise ValueError(f"{where}: unsupported type {type(v).__name__} for flush")
 
@@ -463,7 +458,7 @@ class InputXlsx(BaseModel):
 
         return parts
 
-    def generate_gcode(self, *, do_home: bool = True, do_finish: bool = True, **g_kwargs: Any) -> Path:
+    def generate_gcode(self, **g_kwargs: Any) -> Path:
         """Read the workbook program and emit gcode using the provided PipetG.
 
         Multi-stage handling:
@@ -487,8 +482,7 @@ class InputXlsx(BaseModel):
         try:
             max_ul = float(pg.max_volume_ul)  # type: ignore[arg-type]
 
-            if do_home:
-                pg.home()
+            pg.home()
 
             for rack in pg.setup.racks:
                 sheet_name = f"{rack.name}_vials"
@@ -597,8 +591,7 @@ class InputXlsx(BaseModel):
                                 flush_repeats=0,
                             )
 
-            if do_finish:
-                pg.finish()
+            pg.finish()
 
             return Path(pg.outfile)
 

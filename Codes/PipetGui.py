@@ -523,7 +523,6 @@ class PipetGuiWindow(QMainWindow):
             pg = self._build_pipet(out_path)
             ix = InputXlsx(pipet=pg).load(xlsx_path)
 
-            # Use your defaults (do_home=True, do_finish=True)
             ix.generate_gcode()
 
             self._log(f"[OK] G-code written: {out_path}")

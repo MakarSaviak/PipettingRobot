@@ -270,17 +270,17 @@ class InputXlsx(BaseModel):
         return set(ids)
 
     def _total_solvent_slots(self) -> int:
-        return sum(int(r.solvent_rows) * int(r.solvent_columns) for r in self.pipet.setup.racks)
+        return sum(r.solvent_rows * r.solvent_columns for r in self.pipet.setup.racks)
 
     # ---------- program table parsing (multi-stage) ----------
 
     def _program_header_last_col(self, ws, *, header_row: int) -> int:
         """Last column (in header_row) that has a non-empty header value."""
         last = 1
-        max_c = ws.max_column or 1
-        for c in range(1, max_c + 1):
-            if not self._is_empty(ws.cell(row=header_row, column=c).value):
-                last = c
+        max_col = ws.max_column or 1
+        for col in range(1, max_col + 1):
+            if not self._is_empty(ws.cell(row=header_row, column=col).value):
+                last = col
         return last
 
     def _parse_program_stages(self, ws, *, sheet_name: str, header_row: int) -> list[tuple[int, int, int | None]]:
@@ -314,7 +314,7 @@ class InputXlsx(BaseModel):
             h_vol = norm(ws.cell(row=header_row, column=col).value)
             h_sol = norm(ws.cell(row=header_row, column=col + 1).value) if (col + 1) <= last_col else ""
 
-            # stop when user didn't define more stages
+            # stop when the user didn't define more stages
             if h_vol == "" and h_sol == "":
                 break
 
@@ -332,7 +332,7 @@ class InputXlsx(BaseModel):
             vol_col = col
             sol_col = col + 1
             flush_col: int | None = None
-
+            # check for the flush column
             if (col + 2) <= last_col:
                 h_f = norm(ws.cell(row=header_row, column=col + 2).value)
                 if is_flush(h_f):
@@ -364,18 +364,15 @@ class InputXlsx(BaseModel):
             n_rows = int(rack.solvent_rows)
             n_cols = int(rack.solvent_columns)
 
-            for col in range(n_cols):
-                for row in range(n_rows):
-                    r = 1 + row
-                    c = 1 + col
-                    cell = ws.cell(row=r, column=c)
-                    sid = self._as_int(cell.value, where=f"{name}!{cell.coordinate}")
-                    if sid is None:
+            for col in range(1, n_cols + 1):
+                for row in range(1, n_rows + 1):
+                    cell = ws.cell(row=row, column=col)
+                    s_id = self._as_int(cell.value, where=f"{name}!{cell.coordinate}")
+                    if s_id is None:
                         continue
-                    if sid not in allowed:
+                    if s_id not in allowed:
                         raise ValueError(
-                            f"{name}!{cell.coordinate}: solvent_id={sid} not in setup.solvents ids={sorted(allowed)}"
-                        )
+                            f"{name}!{cell.coordinate}: solvent_id={s_id} not in setup.solvents ids={sorted(allowed)}")
 
     def _validate_vial_program_bounds_impl(self) -> None:
         """Validate solvent_index (all stages) + flush integer bounds (all stages)."""

@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Any
 from itertools import chain
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, validate_call, PositiveFloat
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
 from openpyxl.styles import PatternFill, Border, Side, Alignment, NamedStyle, Font
@@ -372,7 +372,8 @@ class InputXlsx(BaseModel):
                         continue
                     if s_id not in allowed:
                         raise ValueError(
-                            f"{name}!{cell.coordinate}: solvent_id={s_id} not in setup.solvents ids={sorted(allowed)}")
+                            f"{name}!{cell.coordinate}: solvent_id={s_id} not in setup.solvents ids={sorted(allowed)}"
+                        )
 
     def _validate_vial_program_bounds_impl(self) -> None:
         """Validate solvent_index (all stages) + flush integer bounds (all stages)."""
@@ -397,20 +398,22 @@ class InputXlsx(BaseModel):
 
                 for (vol_col, sol_col, flush_col) in stages:
                     sol_cell = ws.cell(row=r, column=sol_col)
-                    sidx = self._as_int(sol_cell.value, where=f"{name}!{sol_cell.coordinate}")
-                    if sidx is not None:
-                        if not (1 <= sidx <= total_slots):
+                    s_idx = self._as_int(sol_cell.value, where=f"{name}!{sol_cell.coordinate}")
+                    if s_idx is not None:
+                        if not (1 <= s_idx <= total_slots):
                             raise ValueError(
-                                f"{name}!{sol_cell.coordinate}: solvent_index={sidx} out of bounds (allowed 1..{total_slots})"
+                                f"{name}!{sol_cell.coordinate}: solvent_index={s_idx} "
+                                f"out of bounds (allowed 1..{total_slots})"
                             )
-
+                    # if only flush is filled, it will still raise an error.
                     if flush_col is not None:
                         f_cell = ws.cell(row=r, column=flush_col)
                         spec = self._parse_flush_spec(f_cell.value, where=f"{name}!{f_cell.coordinate}")
                         if isinstance(spec, int):
                             if not (1 <= spec <= total_slots):
                                 raise ValueError(
-                                    f"{name}!{f_cell.coordinate}: flush solvent_index={spec} out of bounds (allowed 1..{total_slots})"
+                                    f"{name}!{f_cell.coordinate}: flush solvent_index={spec} "
+                                    f"out of bounds (allowed 1..{total_slots})"
                                 )
 
     # ------------------------------------------------------------------
@@ -427,21 +430,18 @@ class InputXlsx(BaseModel):
             n_rows = int(rack.solvent_rows)
             n_cols = int(rack.solvent_columns)
 
-            for col in range(n_cols):
-                for row in range(n_rows):
-                    r = 1 + row
-                    c = 1 + col
-                    cell = ws.cell(row=r, column=c)
-                    sid = self._as_int(cell.value, where=f"{rack.name}_solvents!{cell.coordinate}")
-                    mapping.append(sid)
+            for col in range(1, n_cols + 1):
+                for row in range(1, n_rows + 1):
+                    cell = ws.cell(row=row, column=col)
+                    s_id = self._as_int(cell.value, where=f"{rack.name}_solvents!{cell.coordinate}")
+                    mapping.append(s_id)
         return mapping
 
-    def _split_volume_ul(self, total_ul: float, max_ul: float, *, eps: float = 1e-9) -> list[float]:
+    @validate_call
+    def _split_volume_ul(self, total_ul: float, max_ul: PositiveFloat, *, eps: float = 1e-9) -> list[float]:
         """Split total volume into chunks <= max_ul."""
         if total_ul <= 0:
-            raise ValueError(f"volume_uL must be > 0, got {total_ul}")
-        if max_ul <= 0:
-            raise ValueError(f"max_volume_ul must be > 0, got {max_ul}")
+            raise ValueError(f"volume_uL must be > 0, got {total_ul}") # user-friendly error message
 
         parts: list[float] = []
         remaining = float(total_ul)
@@ -471,10 +471,7 @@ class InputXlsx(BaseModel):
         solvent_id_map = self._solvent_id_by_global_solvent_index()
 
         pg = self.pipet
-        started_here = False
-        if getattr(pg, "g", None) is None:
-            pg.start(**g_kwargs)
-            started_here = True
+        pg.start(**g_kwargs)
 
         try:
             max_ul = float(pg.max_volume_ul)  # type: ignore[arg-type]
@@ -491,14 +488,14 @@ class InputXlsx(BaseModel):
                 header_row = n_rows + 2
                 stages = self._parse_program_stages(ws, sheet_name=sheet_name, header_row=header_row)
 
-                # stage-wise execution (what you asked for)
+                # stage-wise execution
                 for stage_i, (vol_col, sol_col, flush_col) in enumerate(stages, start=1):
                     for i in range(n):
                         r = header_row + 1 + i
 
-                        vial_cell = ws.cell(row=r, column=1)  # index
+                        vial_cell = ws.cell(row=r, column=1)  # vial index
                         vol_cell = ws.cell(row=r, column=vol_col)
-                        sidx_cell = ws.cell(row=r, column=sol_col)
+                        s_idx_cell = ws.cell(row=r, column=sol_col)
                         flush_cell = ws.cell(row=r, column=flush_col) if flush_col is not None else None
 
                         vial_index = self._as_int(vial_cell.value, where=f"{sheet_name}!{vial_cell.coordinate}")
@@ -506,17 +503,20 @@ class InputXlsx(BaseModel):
                             raise ValueError(f"{sheet_name}!{vial_cell.coordinate}: vial index is empty.")
 
                         volume_val = vol_cell.value
-                        sidx_raw = sidx_cell.value
+                        s_idx_raw = s_idx_cell.value
                         flush_raw = flush_cell.value if flush_cell is not None else None
+                        flush_spec = None
+                        if flush_cell is not None:
+                            flush_spec = self._parse_flush_spec(flush_raw, where=f"{sheet_name}!{flush_cell.coordinate}")
 
                         # skip empty stage instruction for this vial
-                        if self._is_empty(volume_val) and self._is_empty(sidx_raw) and self._is_empty(flush_raw):
+                        if self._is_empty(volume_val) and self._is_empty(s_idx_raw) and (flush_spec in {None, False}):
                             continue
 
-                        solvent_index = self._as_int(sidx_raw, where=f"{sheet_name}!{sidx_cell.coordinate}")
+                        solvent_index = self._as_int(s_idx_raw, where=f"{sheet_name}!{s_idx_cell.coordinate}")
                         if solvent_index is None:
                             raise ValueError(
-                                f"{sheet_name}!{sidx_cell.coordinate}: solvent_index is empty "
+                                f"{sheet_name}!{s_idx_cell.coordinate}: solvent_index is empty "
                                 f"(stage {stage_i})."
                             )
                         if self._is_empty(volume_val):
@@ -543,27 +543,22 @@ class InputXlsx(BaseModel):
                                 f"{sheet_name} row {r} stage {stage_i}: solvent_index={solvent_index} has no solvent_id assigned in solvent grids."
                             )
 
-                        # flush spec (optional column)
-                        spec = None
-                        if flush_cell is not None:
-                            spec = self._parse_flush_spec(flush_raw, where=f"{sheet_name}!{flush_cell.coordinate}")
-
                         flush_idx0: int | None = None
                         flush_solvent_id: int | None = None
 
-                        if spec is True:
+                        if flush_spec is True:
                             flush_idx0 = solvent_idx0
                             flush_solvent_id = int(dispense_solvent_id)
-                        elif isinstance(spec, int):
-                            flush_idx0 = spec - 1
+                        elif isinstance(flush_spec, int):
+                            flush_idx0 = flush_spec - 1
                             if not (0 <= flush_idx0 < len(solvent_id_map)):
                                 raise ValueError(
-                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent_index={spec} out of mapping range."
+                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent_index={flush_spec} out of mapping range."
                                 )
                             _sid = solvent_id_map[flush_idx0]
                             if _sid is None:
                                 raise ValueError(
-                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent_index={spec} has no solvent_id assigned in solvent grids."
+                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent_index={flush_spec} has no solvent_id assigned in solvent grids."
                                 )
                             flush_solvent_id = int(_sid)
 
@@ -593,5 +588,4 @@ class InputXlsx(BaseModel):
             return Path(pg.outfile)
 
         finally:
-            if started_here:
-                pg.stop()
+            pg.stop()

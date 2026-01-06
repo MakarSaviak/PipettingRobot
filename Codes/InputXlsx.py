@@ -72,6 +72,16 @@ class InputXlsx(BaseModel):
         n_cols = int(rack.vial_columns)
         n = n_rows * n_cols # total number of vials
 
+        # make the rest of the visible region white
+        table_top = n_rows + 2
+        header_max_col = 1 + (3 * stages)
+
+        rows = chain(ws.iter_rows(min_row=1, max_row=n_rows + 1, min_col=1, max_col=37),
+            ws.iter_rows(min_row=table_top + n + 1, max_row=table_top + n + 30, min_col=1, max_col=37))
+        for row in rows:
+            for cell in row:
+                cell.fill = WHITE
+
         # --- vial grid with global vial indices ---
         idx = start_index
         for col in range(1, n_cols + 1):
@@ -82,25 +92,18 @@ class InputXlsx(BaseModel):
                 cell.alignment = CENTER_ALIGN
                 idx += 1
 
-        # make the rest of the visible region clean white
-        table_top = n_rows + 2
-
-        rows = chain(ws.iter_rows(min_row=1, max_row=n_rows + 1, min_col=1, max_col=37),
-            ws.iter_rows(min_row=table_top + n + 1, max_row=table_top + n + 30, min_col=1, max_col=37))
-        for row in rows:
-            for cell in row:
-                cell.fill = WHITE
-
         # --- program table below: A=index, then (volume_uL, solvent_index, flush)*stages ---
-        for cell in ws[f"A{table_top}:J{table_top}"][0]:
-            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-            cell.border = GRID_BORDER
-        ws.row_dimensions[table_top].height = 30
+
         # headers for stages
+        for col in ws.iter_cols(min_row=table_top, max_row=table_top, min_col=1, max_col=header_max_col):
+            for cell in col:
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        ws.row_dimensions[table_top].height = 30
+
         ws.cell(row=table_top, column=1, value="index") # the vial index header
 
-        for col in range(2, 2 + 3 * stages, 3): # range(start, end, stepsize)
-            ws.cell(row=table_top, column=col, value="volume\nµL")
+        for col in range(2, 1 + header_max_col, 3): # range(start, end, stepsize)
+            ws.cell(row=table_top, column=col + 0, value="volume\nµL")
             ws.cell(row=table_top, column=col + 1, value="solvent\nindex")
             ws.cell(row=table_top, column=col + 2, value="flush")
 
@@ -108,13 +111,14 @@ class InputXlsx(BaseModel):
         for i in range(n):
             r = table_top + 1 + i
             ws.cell(row=r, column=1, value=start_index + i).border = GRID_BORDER
-
-            col = 2
-            for _stage in range(stages):
-                ws.cell(row=r, column=col + 0, value=None).border = GRID_BORDER
-                ws.cell(row=r, column=col + 1, value=None).border = GRID_BORDER
-                ws.cell(row=r, column=col + 2, value=None).border = GRID_BORDER
-                col += 3
+        for row in ws.iter_rows(
+            min_row=table_top,
+            max_row=table_top + n,
+            min_col=1,
+            max_col=header_max_col,
+        ):
+            for cell in row:
+                cell.border = GRID_BORDER
 
         return start_index + n
 

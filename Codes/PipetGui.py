@@ -528,7 +528,9 @@ class PipetGuiWindow(QMainWindow):
     # ---------------- File pickers ----------------
 
     def _pick_template_path(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save Excel template", "", "Excel files (*.xlsx)")
+        csv_dir = self._base_dir.parent / "csv"
+        start_dir = str(csv_dir if csv_dir.is_dir() else self._base_dir)
+        path, _ = QFileDialog.getSaveFileName(self, "Save Excel template", start_dir, "Excel files (*.xlsx)")
         if not path:
             return
         if not path.lower().endswith(".xlsx"):
@@ -536,13 +538,17 @@ class PipetGuiWindow(QMainWindow):
         self.edt_template_path.setText(path)
 
     def _pick_program_path(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Open Excel program", "", "Excel files (*.xlsx)")
+        csv_dir = self._base_dir.parent / "csv"
+        start_dir = str(csv_dir if csv_dir.is_dir() else self._base_dir)
+        path, _ = QFileDialog.getOpenFileName(self, "Open Excel program", start_dir, "Excel files (*.xlsx)")
         if not path:
             return
         self.edt_program_path.setText(path)
 
     def _pick_gcode_path(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save G-code", "", "G-code files (*.gcode)")
+        gcode_dir = self._base_dir.parent / "G-codes"
+        start_dir = str(gcode_dir if gcode_dir.is_dir() else self._base_dir)
+        path, _ = QFileDialog.getSaveFileName(self, "Save G-code", start_dir, "G-code files (*.gcode)")
         if not path:
             return
         if not path.lower().endswith(".gcode"):

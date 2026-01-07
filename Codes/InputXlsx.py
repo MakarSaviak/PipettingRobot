@@ -564,7 +564,7 @@ class InputXlsx(BaseModel):
                         if flush_spec is True:
                             flush_idx0 = solvent_idx0
                             flush_solvent_id = int(dispense_solvent_id)
-                        elif isinstance(flush_spec, bool):
+                        elif isinstance(flush_spec, bool): #TODO if flush_spec is False:
                             pass
                         elif isinstance(flush_spec, int):
                             flush_idx0 = flush_spec - 1

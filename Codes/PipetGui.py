@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import sys
+import json
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -46,10 +47,12 @@ class PipetGuiWindow(QMainWindow):
         self._config_dir = self._base_dir / "config"
         self._racks_dir = self._config_dir / "racks"
         self._machines_dir = self._config_dir / "machines"
+        self._setups_dir = self._config_dir / "setups_for_gui"
 
         self._rack_defs: dict[str, Rack] = {}
         self._machine_names: list[str] = []
         self._rack_actions: dict[str, QAction] = {}
+        self._setup_defs: dict[str, dict] = {}
 
         self._build_ui()
         self._apply_style()
@@ -94,8 +97,9 @@ class PipetGuiWindow(QMainWindow):
         form.setHorizontalSpacing(10)
         form.setVerticalSpacing(8)
 
-        self.edt_setup_name = QLineEdit("GUI")
-        form.addRow("Setup name", self.edt_setup_name)
+        self.cmb_setup = QComboBox()
+        self.cmb_setup.currentIndexChanged.connect(self._on_setup_selected)
+        form.addRow("Setup", self.cmb_setup)
 
         self.cmb_syringe = QComboBox()
         form.addRow("Syringe", self.cmb_syringe)
@@ -352,6 +356,73 @@ class PipetGuiWindow(QMainWindow):
 
         self._update_racks_button_text()
         self._load_syringe_list()
+        self._load_setup_list()
+
+    def _load_setup_list(self):
+        self.cmb_setup.clear()
+        self._setup_defs.clear()
+        if not self._setups_dir.exists():
+            self.cmb_setup.addItem("— no setups —", None)
+            return
+
+        setup_paths = sorted(self._setups_dir.glob("*.json"))
+        if not setup_paths:
+            self.cmb_setup.addItem("— no setups —", None)
+            return
+
+        self.cmb_setup.addItem("— select —", None)
+        for path in setup_paths:
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except Exception as e:
+                self._log(f"[WARN] Cannot load setup '{path.name}': {e!s}")
+                continue
+            name = data.get("name", path.stem)
+            self._setup_defs[name] = data
+            self.cmb_setup.addItem(name, name)
+
+    def _selected_setup(self) -> dict | None:
+        key = self.cmb_setup.currentData()
+        if key is None:
+            return None
+        return self._setup_defs.get(str(key))
+
+    def _on_setup_selected(self):
+        data = self._selected_setup()
+        if not data:
+            return
+
+        machine_name = data.get("machine")
+        if machine_name:
+            idx = self.cmb_machine.findText(machine_name)
+            if idx >= 0:
+                self.cmb_machine.setCurrentIndex(idx)
+
+        s_id = data.get("syringe_id")
+        if s_id is not None:
+            idx = self.cmb_syringe.findData(int(s_id))
+            if idx >= 0:
+                self.cmb_syringe.setCurrentIndex(idx)
+
+        rack_names = data.get("racks") or []
+        self._set_selected_racks_in_order(rack_names)
+
+    def _set_selected_racks_in_order(self, rack_names: list[str]):
+        self.lst_selected_racks.clear()
+        for act in self._rack_actions.values():
+            act.blockSignals(True)
+            act.setChecked(False)
+            act.blockSignals(False)
+
+        for name in rack_names:
+            if name in self._rack_actions:
+                self._rack_actions[name].blockSignals(True)
+                self._rack_actions[name].setChecked(True)
+                self._rack_actions[name].blockSignals(False)
+                self._add_selected_rack(name)
+
+        self._update_racks_button_text()
+        self._update_setup_summary()
 
     def _load_syringe_list(self):
         self.cmb_syringe.clear()
@@ -501,8 +572,12 @@ class PipetGuiWindow(QMainWindow):
         if not solvents:
             raise ValueError("No solvents found in DB. Populate your Solvent table first.")
 
+        setup_name = "GUI"
+        data = self._selected_setup()
+        if data and data.get("name"):
+            setup_name = str(data["name"])
         setup_data = {
-            "name": self.edt_setup_name.text().strip() or "GUI",
+            "name": setup_name,
             "syringes": [syringe],
             "solvents": solvents,
             "racks": racks,

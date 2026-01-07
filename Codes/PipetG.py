@@ -243,7 +243,7 @@ class PipetG(BaseModel):
 
             wx, wy = self.waste_pos  # type: ignore[misc]
             self.fill_vial(wx, wy)
-        g.write("; ")
+        g.write(";")
 
     def process_vial(
             self,
@@ -273,4 +273,4 @@ class PipetG(BaseModel):
         z_min_vial = self.z_min_vials[vial_idx]
         self.fill_vial(vx, vy, slow=slow, z_min=z_min_vial)
 
-        g.write("; ")
+        g.write(";")

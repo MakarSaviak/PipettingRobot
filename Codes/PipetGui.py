@@ -40,7 +40,7 @@ from .Syringe import Syringe
 class PipetGuiWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PipetG • Excel → G-code")
+        self.setWindowTitle("Setup • Excel → G-code")
         self.resize(980, 680)
 
         self._base_dir = Path(__file__).resolve().parent
@@ -226,6 +226,7 @@ class PipetGuiWindow(QMainWindow):
         llay.addWidget(self.txt_log, 1)
 
     def _card(self) -> QFrame:
+        """Returns a panel object called 'card' used for buttons and fields."""
         f = QFrame()
         f.setFrameShape(QFrame.StyledPanel)
         f.setObjectName("card")

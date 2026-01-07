@@ -409,6 +409,8 @@ class InputXlsx(BaseModel):
                     if flush_col is not None:
                         f_cell = ws.cell(row=r, column=flush_col)
                         spec = self._parse_flush_spec(f_cell.value, where=f"{name}!{f_cell.coordinate}")
+                        if isinstance(spec, bool):
+                            continue
                         if isinstance(spec, int):
                             if not (1 <= spec <= total_slots):
                                 raise ValueError(
@@ -562,6 +564,8 @@ class InputXlsx(BaseModel):
                         if flush_spec is True:
                             flush_idx0 = solvent_idx0
                             flush_solvent_id = int(dispense_solvent_id)
+                        elif isinstance(flush_spec, bool):
+                            pass
                         elif isinstance(flush_spec, int):
                             flush_idx0 = flush_spec - 1
                             if not (0 <= flush_idx0 < len(solvent_id_map)):

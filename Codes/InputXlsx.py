@@ -515,6 +515,38 @@ class InputXlsx(BaseModel):
                         if self._is_empty(volume_val) and self._is_empty(s_idx_raw) and (flush_spec in {None, False}):
                             continue
 
+                        # flush handling (supports flush-only rows)
+                        flush_idx0: int | None = None  # 0-based flush index
+                        flush_solvent_id: int | None = None
+                        if isinstance(flush_spec, int) and not isinstance(flush_spec, bool):
+                            flush_idx0 = flush_spec - 1
+                            if not (0 <= flush_idx0 < len(solvent_id_map)):
+                                raise ValueError(
+                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent index={flush_spec} "
+                                    f"out of mapping range."
+                                )
+                            _s_id = solvent_id_map[flush_idx0]
+                            if _s_id is None:
+                                raise ValueError(
+                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent index={flush_spec} "
+                                    f"has no solvent_id assigned in solvent grids."
+                                )
+                            flush_solvent_id = int(_s_id)
+
+                        if self._is_empty(volume_val) and self._is_empty(s_idx_raw):
+                            if flush_idx0 is None or flush_solvent_id is None:
+                                raise ValueError(
+                                    f"{sheet_name}!{flush_cell.coordinate}: flush-only rows require an integer "
+                                    f"solvent index (stage {stage_i})."
+                                )
+                            pg.flush(
+                                volume_ul=max_ul,
+                                repeats=1,
+                                solvent_idx=flush_idx0,
+                                solvent_id=flush_solvent_id,
+                            )
+                            continue
+
                         s_idx = self._as_int(s_idx_raw, where=f"{sheet_name}!{s_idx_cell.coordinate}")
                         if s_idx is None:
                             raise ValueError(
@@ -558,32 +590,13 @@ class InputXlsx(BaseModel):
                                 f"has no solvent_id assigned in solvent grids."
                             )
 
-                        flush_idx0: int | None = None # 0-based flush index
-                        flush_solvent_id: int | None = None
-
                         if flush_spec is True:
                             flush_idx0 = solvent_idx0
                             flush_solvent_id = int(dispense_solvent_id)
-                        elif isinstance(flush_spec, bool): #TODO if flush_spec is False:
-                            pass
-                        elif isinstance(flush_spec, int):
-                            flush_idx0 = flush_spec - 1
-                            if not (0 <= flush_idx0 < len(solvent_id_map)):
-                                raise ValueError(
-                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent index={flush_spec} "
-                                    f"out of mapping range."
-                                )
-                            _s_id = solvent_id_map[flush_idx0]
-                            if _s_id is None:
-                                raise ValueError(
-                                    f"{sheet_name}!{flush_cell.coordinate}: flush solvent index={flush_spec} "
-                                    f"has no solvent_id assigned in solvent grids."
-                                )
-                            flush_solvent_id = int(_s_id)
 
-                        # flush only ONCE per stage-row, and never more than max_volume_ul per repeat
+                        # flush only once per stage
                         if flush_idx0 is not None and flush_solvent_id is not None:
-                            flush_vol = min(volume_ul_total, max_ul)
+                            flush_vol = min(volume_ul_total, max_ul) # flush no more than max_volume_ul
                             pg.flush(
                                 volume_ul=flush_vol,
                                 repeats=1,

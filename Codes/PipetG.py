@@ -179,6 +179,7 @@ class PipetG(BaseModel):
     def finish(self) -> None:
         g = self._get_g()
 
+        g.write("; finish")
         self.move_to(x=self.rest_x, y=self.rest_y, F=self.Fxy)
         g.write("M84")
 

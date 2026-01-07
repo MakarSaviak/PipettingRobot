@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, model_validator
-from .Syringe import Syringe
-from .db import create_db_and_tables
+from Codes.Syringe import Syringe
+from Codes.db import create_db_and_tables
 
 
 class IntegratedSyringe(BaseModel):

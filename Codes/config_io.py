@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = BASE_DIR / "config"
 
 def load_model(cls: type[T], name: str) -> T:
@@ -19,7 +19,7 @@ def load_model(cls: type[T], name: str) -> T:
 
 def save_model(model: BaseModel, name: str) -> Path:
     """
-    Save a Pydantic model to Codes/config/<models>/<name>.json
+    Save a Pydantic model to config/<models>/<name>.json
     Folder is derived from the model class name.
     """
     subdir = model.__class__.__name__.lower() + "s"

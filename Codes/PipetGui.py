@@ -44,7 +44,7 @@ class PipetGuiWindow(QMainWindow):
         self.resize(980, 680)
 
         self._base_dir = Path(__file__).resolve().parent
-        self._config_dir = self._base_dir / "config"
+        self._config_dir = self._base_dir.parent / "config"
         self._racks_dir = self._config_dir / "racks"
         self._machines_dir = self._config_dir / "machines"
         self._setups_dir = self._config_dir / "setups_for_gui"

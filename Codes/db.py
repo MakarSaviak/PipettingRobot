@@ -1,11 +1,11 @@
 from sqlmodel import SQLModel, create_engine, Session
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent
+BASE_DIR = Path(__file__).resolve().parent.parent
 DB_DIR = BASE_DIR / "config" / "DB"
 DB_DIR.mkdir(parents=True, exist_ok=True)
 
-# DB file inside Codes/config/DB:
+# DB file inside config/DB:
 sqlite_path = DB_DIR / "liquid_handling.db"
 sqlite_url = f"sqlite:///{sqlite_path}"
 engine = create_engine(sqlite_url, echo=False)

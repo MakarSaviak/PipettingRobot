@@ -59,6 +59,25 @@ class InputXlsx(BaseModel):
             for cell in row:
                 cell.fill = WHITE
 
+        instructions = [
+            "1) Hover over the colored grid to see the solvent index.",
+            "2) Fill in the solvent id.",
+            "",
+            "Without a filled in solvent id, the solvent is not valid. If you do not need precise pipetting, "
+            "use the solvent id of a hydrodynamically similar or generic solvent, such as water or acetone.",
+            "",
+            "<<<---Where to find solvent id?-->>>",
+            "Inside config/DB/liquid_handling.db find the solvent list in the solvent table.",
+            "Any solvent can be used with the selected syringe only if they have a couple listed inside the "
+            "syringe solvent link table where the calibrated pipeting parameters are stored for the software.",
+        ]
+        for i, line in enumerate(instructions):
+            cell = ws.cell(row=n_rows + 2 + i, column=10, value=line)
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
+            cell.font = HEADER_BOLD
+            if i == 5:
+                cell.font = Font(color="FFA62B", bold=True)
+
         idx = start_index
         for col in range(1, n_cols + 1):
             for row in range(1, n_rows + 1):
@@ -110,6 +129,10 @@ class InputXlsx(BaseModel):
                 cell.font = HEADER_BOLD
         ws.row_dimensions[table_top].height = 30
 
+        hint_cell = ws.cell(row=table_top - 1, column=10, value="Find the instruction below the vial program.")
+        hint_cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
+        hint_cell.font = HEADER_BOLD
+
         ws.cell(row=table_top, column=1, value="index") # the vial index header
         for i in range(n):
             r = table_top + 1 + i
@@ -130,6 +153,31 @@ class InputXlsx(BaseModel):
         for row in ws.iter_rows(min_row=table_top, max_row=table_top + n, min_col=1, max_col=header_max_col):
             for cell in row:
                 cell.border = GRID_BORDER
+
+        instructions = [
+            "1) Enter volume (µL) and solvent index for each stage.",
+            "",
+            "<<<---What is a stage?-->>>",
+            "",
+            "Stage is a group of columns: {volume µL, solvent index} or {volume µL, solvent index, flush}.}",
+            "The pipetting program is generated stage by stage (downwards).",
+            "Add as many stages as you need by copy pasting columns in the table.",
+            "",
+            "<<<---Flushing the syringe--->>>"
+            "2) Optional: enter flush TRUE to flush with the solvent used pipetting "
+            "or an integer solvent index to flush with a specific solvent.",
+            "",
+            "3) Fill the cell containing a volume value with any color "
+            "to dispense the liquid slowly (crystallization?).",
+            "",
+            "4) Leave a stage row empty to skip it.",
+        ]
+        for i, line in enumerate(instructions):
+            cell = ws.cell(row=table_top + n + 2 + i, column=10, value=line)
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=False)
+            cell.font = HEADER_BOLD
+            if i == 2:
+                cell.font = Font(color="FFA62B", bold=True)
 
         return start_index + n
 

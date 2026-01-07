@@ -7,7 +7,7 @@ from itertools import chain
 from pydantic import BaseModel, ConfigDict, Field, model_validator, validate_call, PositiveFloat
 from openpyxl import Workbook, load_workbook
 from openpyxl.comments import Comment
-from openpyxl.styles import PatternFill, Border, Side, Alignment, NamedStyle, Font
+from openpyxl.styles import PatternFill, Border, Side, Alignment, Font
 
 from .PipetG import PipetG
 

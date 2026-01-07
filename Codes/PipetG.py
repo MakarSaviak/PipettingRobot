@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, PositiveInt, PositiveFloat, NonNegativeInt, NonNegativeFloat, ConfigDict, Field
+from pydantic import (BaseModel,
+                      PositiveInt, PositiveFloat, NonNegativeInt, NonNegativeFloat,
+                      ConfigDict,
+                      Field
+                      )
 from mecode import G
 
 from .Setup import Setup
@@ -219,7 +223,7 @@ class PipetG(BaseModel):
 
         g.move(z=self.z_max, F=self.Fz)
 
-    def flush(self, volume_ul: float, *,
+    def flush(self, volume_ul: NonNegativeFloat, *,
               repeats: PositiveInt = 1,
               solvent_idx: NonNegativeInt,
               solvent_id: PositiveInt) -> None:
@@ -234,11 +238,12 @@ class PipetG(BaseModel):
         z_min_solvent = self.z_min_solvents[solvent_idx]
 
         for _ in range(int(repeats)):
-            g.write("flush")
+            g.write("; flush")
             self.remove_from_vial(sx, sy, volume_ul, solvent_id, z_min=z_min_solvent)
 
             wx, wy = self.waste_pos  # type: ignore[misc]
             self.fill_vial(wx, wy)
+        g.write("; ")
 
     def process_vial(
             self,
@@ -246,12 +251,18 @@ class PipetG(BaseModel):
             vial_idx: NonNegativeInt,
             solvent_idx: NonNegativeInt,
             solvent_id: PositiveInt,
-            volume_ul: float,
+            volume_ul: NonNegativeFloat,
             slow: bool = False,
             flush_repeats: NonNegativeInt = 0,
     ) -> None:
         if flush_repeats > 0:
             self.flush(volume_ul, repeats=flush_repeats, solvent_idx=solvent_idx, solvent_id=solvent_id)
+
+        # --- additional text ---
+        g = self._get_g()
+        g.write(f"; process vial (vial: {vial_idx+1}, solvent: {solvent_idx+1},"
+                f" vol: {volume_ul}, slow: {slow}) solvent id: {solvent_id}")
+        # -----------------------
 
         pos = self.solvent_positions  # type: ignore[assignment]
         sx, sy = pos[solvent_idx]
@@ -261,3 +272,5 @@ class PipetG(BaseModel):
         vx, vy = self.vial_positions[vial_idx]
         z_min_vial = self.z_min_vials[vial_idx]
         self.fill_vial(vx, vy, slow=slow, z_min=z_min_vial)
+
+        g.write("; ")

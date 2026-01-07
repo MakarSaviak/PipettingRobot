@@ -1,7 +1,8 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, select
 from sqlalchemy import UniqueConstraint, exc
 from pydantic import PositiveFloat, computed_field, NonNegativeInt
 import numpy as np
+from typing import cast
 
 from .db import get_session
 
@@ -88,3 +89,9 @@ class Syringe(SQLModel, table=True):
                 raise ValueError(f"Could not delete syringe id={syringe_id}.") from e
 
         return True
+
+    @classmethod
+    def get_all(cls) -> list["Syringe"]:
+        with get_session() as session:
+            rows = session.exec(select(cls)).all()
+            return cast(list["Syringe"], rows)

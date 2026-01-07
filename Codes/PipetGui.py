@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QTextEdit,
     QToolButton,
     QVBoxLayout,
@@ -98,10 +97,8 @@ class PipetGuiWindow(QMainWindow):
         self.edt_setup_name = QLineEdit("GUI")
         form.addRow("Setup name", self.edt_setup_name)
 
-        self.spin_syringe_id = QSpinBox()
-        self.spin_syringe_id.setRange(1, 10_000_000)
-        self.spin_syringe_id.setValue(1)
-        form.addRow("Syringe ID", self.spin_syringe_id)
+        self.cmb_syringe = QComboBox()
+        form.addRow("Syringe", self.cmb_syringe)
 
         self.cmb_machine = QComboBox()
         form.addRow("Machine", self.cmb_machine)
@@ -233,8 +230,7 @@ class PipetGuiWindow(QMainWindow):
         return f
 
     def _apply_style(self):
-        self.setStyleSheet(
-            """
+        base_style = """
             QMainWindow { background: #0f1115; }
             QLabel { color: #e9ecf1; }
             QLineEdit, QComboBox, QSpinBox, QListWidget, QTextEdit {
@@ -278,7 +274,33 @@ class PipetGuiWindow(QMainWindow):
             QMenu::item { padding: 8px 10px; border-radius: 8px; }
             QMenu::item:selected { background: #2b3b55; }
             """
-        )
+        linux_popup = ""
+        if sys.platform.startswith("linux"):
+            linux_popup = """
+            QComboBox QAbstractItemView {
+                background: #151a22;
+                color: #e9ecf1;
+                border: 1px solid #263042;
+                padding: 4px;
+                selection-background-color: #2b3b55;
+            }
+            QComboBox QAbstractItemView::viewport {
+                background: #151a22;
+            }
+            QComboBox QAbstractItemView QScrollBar:vertical {
+                background: #0f141d;
+            }
+            QComboBox QAbstractItemView::item {
+                background: #151a22;
+                color: #e9ecf1;
+            }
+            QComboBox QAbstractItemView::item:selected {
+                background: #2b3b55;
+                color: #e9ecf1;
+            }
+            """
+        self.setStyleSheet(base_style + linux_popup)
+
 
     # ---------------- Config discovery ----------------
 
@@ -329,6 +351,28 @@ class PipetGuiWindow(QMainWindow):
             self._rack_actions[name] = act
 
         self._update_racks_button_text()
+        self._load_syringe_list()
+
+    def _load_syringe_list(self):
+        self.cmb_syringe.clear()
+        self.cmb_syringe.addItem("— select —", None)
+        try:
+            syringes = Syringe.get_all()
+        except Exception as e:
+            self._log(f"[WARN] Cannot load syringes from DB: {e!s}")
+            return
+
+        for s in syringes:
+            if s.id is None:
+                continue
+            label = f"{s.id} - {s.name}"
+            self.cmb_syringe.addItem(label, int(s.id))
+
+    def _selected_syringe_id(self) -> int:
+        s_id = self.cmb_syringe.currentData()
+        if s_id is None:
+            raise ValueError("Please select a syringe.")
+        return int(s_id)
 
     def _set_all_racks_checked(self, checked: bool):
         for act in self._rack_actions.values():
@@ -448,10 +492,10 @@ class PipetGuiWindow(QMainWindow):
         machine = load_model(Machine, machine_name)
         racks = [load_model(Rack, rn) for rn in rack_names]
 
-        syringe_id = int(self.spin_syringe_id.value())
-        syringe = Syringe.get_by_id(syringe_id)
+        s_id = self._selected_syringe_id()
+        syringe = Syringe.get_by_id(s_id)
         if syringe is None:
-            raise ValueError(f"No syringe with id={syringe_id} found in DB.")
+            raise ValueError(f"No syringe with id={s_id} found in DB.")
 
         solvents = Solvent.get_all()
         if not solvents:
@@ -468,8 +512,8 @@ class PipetGuiWindow(QMainWindow):
 
     def _build_pipet(self, outfile: Path) -> PipetG:
         setup = self._build_setup()
-        syringe_id = int(self.spin_syringe_id.value())
-        return PipetG(outfile=outfile, setup=setup, syringe_id=syringe_id)
+        s_id = self._selected_syringe_id()
+        return PipetG(outfile=outfile, setup=setup, syringe_id=s_id)
 
     # ---------------- Actions ----------------
 

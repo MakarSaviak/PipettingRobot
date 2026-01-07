@@ -1,0 +1,6 @@
+{
+    "name": "basic",
+    "syringe_id": 1,
+    "machine": "current",
+    "racks": ["GC-10-3_3-1", "counterion-96"]
+  }

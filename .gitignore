@@ -3,11 +3,14 @@ __pycache__/
 *.pyc
 
 # Codex workspace
-Codex/
 AGENTS.md
 # Generated outputs
-G-codes/
-csv/
+G-codes/*
+csv/*
+
+# Keep empty dirs in git
+!G-codes/.gitkeep
+!csv/.gitkeep
 
 # IDE (PyCharm)
 .idea/

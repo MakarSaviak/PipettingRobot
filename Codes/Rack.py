@@ -2,9 +2,6 @@ from pydantic import BaseModel, PositiveFloat, PositiveInt, NonNegativeFloat, Fi
 import numpy as np
 from typing import Literal
 
-from .config_io import save_model
-
-
 class Rack(BaseModel):
     name: str
     vial1_x: NonNegativeFloat
@@ -56,29 +53,3 @@ class Rack(BaseModel):
         y = y0 + row * dy
 
         return list(map(tuple, np.column_stack((x, y))))
-
-
-if __name__ == "__main__":
-    # python -m Codes.Rack
-    rack_data2 = {
-        "name": "GC-10-3_3-1",
-        "vial1_x": 180.0,
-        "vial1_y": 0.0,
-        "vial_dy": 15.0,
-        "vial_dx": 15.0,
-        "vial_rows": 10,
-        "vial_columns": 3,
-        "solvent1_x": 235.0,
-        "solvent1_y": 7.5,
-        "solvent_rows": 3,
-        "solvent_columns": 1,
-        "solvent_dy": 35.0,
-        "solvent_dx": None,
-        "waste_x": 235.0,
-        "waste_y": 110.0
-    }
-    rack2 = Rack.model_validate(rack_data2)
-
-    # print(rack2.z_min_vials)
-    print(rack2.positions_vial)
-    # save_model(rack2, "GC-10-3_3-1")

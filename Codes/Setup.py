@@ -119,29 +119,3 @@ class Setup(BaseModel):
             rack_z_min = self.machine.z_min if rack.z_min_solvents is None else rack.z_min_solvents
             z_min_values.extend([rack_z_min] * len(rack.positions_solvent))
         return z_min_values
-
-
-if __name__ == "__main__":
-    create_db_and_tables()
-
-    syringes = [Syringe.get_by_id(1)]
-    solvents = Solvent.get_all()
-
-    rack1 = load_model(Rack, "GC-10-3_3-1")
-    rack2 = load_model(Rack, "counterion-96")
-    racks = [rack1, rack2]
-
-    machine = load_model(Machine, "current")
-
-    setup_data = {
-        "name": "Test",
-        "syringes": syringes,
-        "solvents": solvents,
-        "racks": racks,
-        "machine": machine
-    }
-    setup = Setup.model_validate(setup_data)
-    z_min_vials = setup.z_min_vials
-    z_min_solvents = setup.z_min_solvents
-    print("z_min_vials: ", z_min_vials)
-    print("z_min_solvents: ", z_min_solvents)

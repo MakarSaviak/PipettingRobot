@@ -133,7 +133,7 @@ class PipetGuiWindow(QMainWindow):
         self.lst_selected_racks.setDragDropMode(QListWidget.InternalMove)
         self.lst_selected_racks.setDefaultDropAction(Qt.MoveAction)
         self.lst_selected_racks.setMinimumHeight(140)
-        self.lst_selected_racks.model().rowsMoved.connect(self._update_setup_summary)
+        self.lst_selected_racks.model().rowsMoved.connect(lambda *_: self._update_setup_summary())
         racks_row_l.addWidget(self.lst_selected_racks)
 
         self.lbl_setup_summary = QLabel("No racks selected.")
@@ -337,11 +337,11 @@ class PipetGuiWindow(QMainWindow):
         self.racks_menu.clear()
 
         act_all = QAction("Select all", self)
-        act_all.triggered.connect(lambda: self._set_all_racks_checked(True))
+        act_all.triggered.connect(lambda *_: self._set_all_racks_checked(True))
         self.racks_menu.addAction(act_all)
 
         act_none = QAction("Select none", self)
-        act_none.triggered.connect(lambda: self._set_all_racks_checked(False))
+        act_none.triggered.connect(lambda *_: self._set_all_racks_checked(False))
         self.racks_menu.addAction(act_none)
 
         self.racks_menu.addSeparator()
@@ -387,7 +387,7 @@ class PipetGuiWindow(QMainWindow):
             return None
         return self._setup_defs.get(str(key))
 
-    def _on_setup_selected(self):
+    def _on_setup_selected(self, *_):
         data = self._selected_setup()
         if not data:
             return
@@ -479,7 +479,7 @@ class PipetGuiWindow(QMainWindow):
                 self.lst_selected_racks.takeItem(i)
                 return
 
-    def _clear_selected_racks(self):
+    def _clear_selected_racks(self, *_):
         self.lst_selected_racks.clear()
         for act in self._rack_actions.values():
             act.blockSignals(True)
@@ -495,7 +495,7 @@ class PipetGuiWindow(QMainWindow):
     def _selected_rack_names_in_order(self) -> list[str]:
         return [self.lst_selected_racks.item(i).text() for i in range(self.lst_selected_racks.count())]
 
-    def _update_setup_summary(self):
+    def _update_setup_summary(self, *_):
         names = self._selected_rack_names_in_order()
         if not names:
             self.lbl_setup_summary.setText("No racks selected.")
@@ -527,7 +527,7 @@ class PipetGuiWindow(QMainWindow):
 
     # ---------------- File pickers ----------------
 
-    def _pick_template_path(self):
+    def _pick_template_path(self, *_):
         csv_dir = self._base_dir.parent / "csv"
         start_dir = str(csv_dir if csv_dir.is_dir() else self._base_dir)
         path, _ = QFileDialog.getSaveFileName(self, "Save Excel template", start_dir, "Excel files (*.xlsx)")
@@ -537,7 +537,7 @@ class PipetGuiWindow(QMainWindow):
             path += ".xlsx"
         self.edt_template_path.setText(path)
 
-    def _pick_program_path(self):
+    def _pick_program_path(self, *_):
         csv_dir = self._base_dir.parent / "csv"
         start_dir = str(csv_dir if csv_dir.is_dir() else self._base_dir)
         path, _ = QFileDialog.getOpenFileName(self, "Open Excel program", start_dir, "Excel files (*.xlsx)")
@@ -545,7 +545,7 @@ class PipetGuiWindow(QMainWindow):
             return
         self.edt_program_path.setText(path)
 
-    def _pick_gcode_path(self):
+    def _pick_gcode_path(self, *_):
         gcode_dir = self._base_dir.parent / "G-codes"
         start_dir = str(gcode_dir if gcode_dir.is_dir() else self._base_dir)
         path, _ = QFileDialog.getSaveFileName(self, "Save G-code", start_dir, "G-code files (*.gcode)")
@@ -598,7 +598,7 @@ class PipetGuiWindow(QMainWindow):
 
     # ---------------- Actions ----------------
 
-    def _on_create_template(self):
+    def _on_create_template(self, *_):
         try:
             out = self.edt_template_path.text().strip()
             if not out:
@@ -623,7 +623,7 @@ class PipetGuiWindow(QMainWindow):
             self._log(f"[ERR] Template creation failed: {e!s}")
             QMessageBox.critical(self, "Error", str(e))
 
-    def _on_generate_gcode(self):
+    def _on_generate_gcode(self, *_):
         try:
             xlsx = self.edt_program_path.text().strip()
             if not xlsx:

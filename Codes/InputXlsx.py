@@ -623,7 +623,8 @@ class InputXlsx(BaseModel):
 
                         if volume_ul_total > max_ul:
                             chunks = self._split_volume_ul(volume_ul_total, max_ul)
-
+                        else:
+                            chunks = [volume_ul_total]
                         # Excel indices are 1-based; PipetG expects 0-based indices
                         vial_idx0 = vial_index - 1
                         solvent_idx0 = s_idx - 1

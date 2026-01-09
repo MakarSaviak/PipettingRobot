@@ -621,6 +621,12 @@ class InputXlsx(BaseModel):
                                 f"(stage {stage_i})."
                             ) from e
 
+                        if volume_ul_total < 0:
+                            raise ValueError(
+                                f"{sheet_name}!{vol_cell.coordinate}: volume_uL must be >= 0 "
+                                f"(stage {stage_i})."
+                            )
+
                         if volume_ul_total > max_ul:
                             chunks = self._split_volume_ul(volume_ul_total, max_ul)
                         else:

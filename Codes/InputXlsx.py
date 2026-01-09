@@ -620,7 +620,9 @@ class InputXlsx(BaseModel):
                                 f"{sheet_name}!{vol_cell.coordinate}: volume_uL must be a number "
                                 f"(stage {stage_i})."
                             ) from e
-                        chunks = self._split_volume_ul(volume_ul_total, max_ul)
+
+                        if volume_ul_total > max_ul:
+                            chunks = self._split_volume_ul(volume_ul_total, max_ul)
 
                         # Excel indices are 1-based; PipetG expects 0-based indices
                         vial_idx0 = vial_index - 1

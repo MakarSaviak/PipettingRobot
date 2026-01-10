@@ -22,7 +22,9 @@ class PipetG(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     max_volume_ul: PositiveFloat | None = Field(default=None, exclude=True, repr=False)
-    waste_pos: tuple[NonNegativeFloat, NonNegativeFloat] | None = Field(default=None, exclude=True, repr=False)
+    waste_positions: list[tuple[NonNegativeFloat, NonNegativeFloat]] | None = Field(
+        default=None, exclude=True, repr=False
+    )
     solvent_positions: list[tuple[NonNegativeFloat, NonNegativeFloat]] | None = Field(default=None, exclude=True,
                                                                                       repr=False)
     vial_positions: list[tuple[NonNegativeFloat, NonNegativeFloat]] | None = Field(default=None, exclude=True,
@@ -75,7 +77,7 @@ class PipetG(BaseModel):
     def _get_ready(self) -> None:
         if (
                 self.max_volume_ul is None
-                or self.waste_pos is None
+                or self.waste_positions is None
                 or self.solvent_positions is None
                 or self.vial_positions is None
                 or self.z_min_solvents is None
@@ -133,7 +135,9 @@ class PipetG(BaseModel):
         self.rest_y = machine.rest_y
 
         # rack
-        self.waste_pos = (racks[0].waste_x, racks[0].waste_y)  # TODO figure it out how to deal with multiple wastes
+        self.waste_positions = []
+        for rack in racks:
+            self.waste_positions.append((rack.waste_x, rack.waste_y))
 
         # derived
         self.solvent_positions = self.setup.solvent_positions
@@ -223,6 +227,16 @@ class PipetG(BaseModel):
 
         g.move(z=self.z_max, F=self.Fz)
 
+    def _rack_index_from_solvent_idx(self, solvent_idx: int) -> int:
+        racks = self.setup.racks
+        offset = 0
+        for i, rack in enumerate(racks):
+            count = len(rack.positions_solvent)
+            if offset <= solvent_idx < offset + count:
+                return i
+            offset += count
+        raise IndexError(f"Solvent idx '{solvent_idx}' is out of bound {offset - 1}.")
+
     def flush(self, volume_ul: NonNegativeFloat, *,
               repeats: PositiveInt = 1,
               solvent_idx: NonNegativeInt,
@@ -238,10 +252,13 @@ class PipetG(BaseModel):
         z_min_solvent = self.z_min_solvents[solvent_idx]
 
         for _ in range(int(repeats)):
-            g.write("; flush")
+            waste_positions = self.waste_positions  # type: ignore[assignment]
+            rack_idx = self._rack_index_from_solvent_idx(int(solvent_idx))
+            wx, wy = waste_positions[rack_idx]
+
+            g.write(f"; flush (solvent: {solvent_idx+1}, vol: {volume_ul}) waste pos: ({wx}, {wy})")
             self.remove_from_vial(sx, sy, volume_ul, solvent_id, z_min=z_min_solvent)
 
-            wx, wy = self.waste_pos  # type: ignore[misc]
             self.fill_vial(wx, wy)
         g.write(";")
 

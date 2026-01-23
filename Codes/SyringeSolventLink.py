@@ -1,7 +1,9 @@
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import event, exc
-from pydantic import NonNegativeFloat, PositiveFloat
+from pydantic import NonNegativeFloat, PositiveFloat, ConfigDict, model_validator
 from datetime import datetime
+from sqlmodel import select
+from typing import cast
 
 from .Syringe import Syringe
 from .Solvent import Solvent
@@ -9,6 +11,8 @@ from .db import get_session
 
 
 class SyringeSolventLink(SQLModel, table=True):
+    model_config = ConfigDict(validate_assignment=True)
+
     syringe_id: int = Field(foreign_key="syringe.id", primary_key=True)
     solvent_id: int = Field(foreign_key="solvent.id", primary_key=True)
 
@@ -19,6 +23,15 @@ class SyringeSolventLink(SQLModel, table=True):
 
     syringe: Syringe = Relationship(back_populates="solvent_links")
     solvent: Solvent = Relationship(back_populates="syringe_links")
+
+    @model_validator(mode="after")
+    def _validate_ids(self) -> "SyringeSolventLink":
+        with get_session() as session:
+            if session.get(Syringe, self.syringe_id) is None:
+                raise ValueError(f"Unknown syringe_id={self.syringe_id}")
+            if session.get(Solvent, self.solvent_id) is None:
+                raise ValueError(f"Unknown solvent_id={self.solvent_id}")
+        return self
 
     @classmethod    # to ensure that any way of creation will set the initial correlation factor to the theoretical one
     def __declare_last__(cls):
@@ -132,3 +145,9 @@ class SyringeSolventLink(SQLModel, table=True):
                 raise ValueError("Could not update link.") from e
 
         return link
+
+    @classmethod
+    def get_all(cls) -> list["SyringeSolventLink"]:
+        with get_session() as session:
+            rows = session.exec(select(cls)).all()
+            return cast(list["SyringeSolventLink"], rows)

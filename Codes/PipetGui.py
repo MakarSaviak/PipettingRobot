@@ -14,7 +14,7 @@ from .gui.gcode_tab import GCodeTab
 class PipetGuiWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Setup • Excel → G-code")
+        self.setWindowTitle("PipetGui")
         self.resize(1080, 680)
 
         self.tabs = QTabWidget(self)

@@ -161,7 +161,7 @@ class DbTab(QWidget):
         self.tbl_links = QTableWidget()
         self.tbl_links.setColumnCount(6)
         self.tbl_links.setHorizontalHeaderLabels(
-            ["syringe_id", "solvent_id", "calibrated", "backlash_correction", "real_correlation_factor", "since"]
+            ["syringe id", "solvent id", "calibrated", "backlash correction, mm", "real correlation factor, mm/μl", "since"]
         )
         self.tbl_links.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tbl_links.setSelectionMode(QAbstractItemView.ExtendedSelection)

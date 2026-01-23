@@ -50,11 +50,12 @@ class CalibrationTab(QWidget):
     def _build_ui(self) -> None:
         root = QVBoxLayout(self)
         root.setContentsMargins(16, 16, 16, 16)
-        root.setSpacing(12)
+        root.setSpacing(8)
 
         title = QLabel("Calibration")
         title.setFont(QFont("Segoe UI", 14, QFont.Bold))
         root.addWidget(title)
+        root.addSpacing(10)
 
         syringe_row = QHBoxLayout()
         syringe_row.addWidget(QLabel("Syringe"))
@@ -62,6 +63,14 @@ class CalibrationTab(QWidget):
         self.cmb_syringe.currentIndexChanged.connect(self._update_generate_enabled)
         syringe_row.addWidget(self.cmb_syringe, 1)
         root.addLayout(syringe_row)
+        root.addSpacing(10)
+
+        rack_row = QHBoxLayout()
+        rack_row.addWidget(QLabel("Rack"))
+        self.cmb_rack = QComboBox()
+        rack_row.addWidget(self.cmb_rack, 1)
+        root.addLayout(rack_row)
+        root.addSpacing(10)
 
         self.subtabs = QTabWidget()
         root.addWidget(self.subtabs, 1)
@@ -72,18 +81,9 @@ class CalibrationTab(QWidget):
     def _build_fast_tab(self) -> None:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(12, 6, 12, 12)
-        layout.setSpacing(6)
-
-        header = QLabel("Same vial (fast)")
-        header.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        layout.addWidget(header)
-
-        rack_row = QHBoxLayout()
-        rack_row.addWidget(QLabel("Rack"))
-        self.cmb_fast_rack = QComboBox()
-        rack_row.addWidget(self.cmb_fast_rack, 1)
-        layout.addLayout(rack_row)
+        layout.setContentsMargins(12, 2, 12, 12)
+        layout.setSpacing(10)
+        layout.addSpacing(10)
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight)
@@ -103,9 +103,9 @@ class CalibrationTab(QWidget):
         self.spn_fast_pause.setDecimals(3)
         self.spn_fast_pause.setValue(10.0)
 
-        form.addRow("X [mm]:", self.spn_fast_x)
-        form.addRow("Y [mm]:", self.spn_fast_y)
-        form.addRow("Pause [s]:", self.spn_fast_pause)
+        form.addRow("X, mm:", self.spn_fast_x)
+        form.addRow("Y, mm:", self.spn_fast_y)
+        form.addRow("Pause, s:", self.spn_fast_pause)
         layout.addLayout(form)
 
         self.chk_fast_flush = QCheckBox("Initial flush (3×)")
@@ -121,18 +121,9 @@ class CalibrationTab(QWidget):
     def _build_vials_tab(self) -> None:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(12, 6, 12, 12)
-        layout.setSpacing(6)
-
-        header = QLabel("Different vials")
-        header.setFont(QFont("Segoe UI", 12, QFont.Bold))
-        layout.addWidget(header)
-
-        rack_row = QHBoxLayout()
-        rack_row.addWidget(QLabel("Rack"))
-        self.cmb_vials_rack = QComboBox()
-        rack_row.addWidget(self.cmb_vials_rack, 1)
-        layout.addLayout(rack_row)
+        layout.setContentsMargins(12, 2, 12, 12)
+        layout.setSpacing(10)
+        layout.addSpacing(10)
 
         form = QFormLayout()
         form.setLabelAlignment(Qt.AlignRight)
@@ -149,9 +140,9 @@ class CalibrationTab(QWidget):
         self.spn_100.setRange(0, 1000000)
         self.spn_100.setValue(3)
 
-        form.addRow("Vials @ 10% volume:", self.spn_10)
-        form.addRow("Vials @ 50% volume:", self.spn_50)
-        form.addRow("Vials @ 100% volume:", self.spn_100)
+        form.addRow("Vials at 10% volume:", self.spn_10)
+        form.addRow("Vials at 50% volume:", self.spn_50)
+        form.addRow("Vials at 100% volume:", self.spn_100)
         layout.addLayout(form)
 
         self.chk_vials_flush = QCheckBox("Initial flush")
@@ -184,18 +175,13 @@ class CalibrationTab(QWidget):
         else:
             self._machine_names = []
 
-        self.cmb_fast_rack.clear()
-        self.cmb_vials_rack.clear()
-
-        self.cmb_fast_rack.addItem("— select —", None)
-        self.cmb_vials_rack.addItem("— select —", None)
+        self.cmb_rack.clear()
+        self.cmb_rack.addItem("— select —", None)
         for name in self._rack_names:
-            self.cmb_fast_rack.addItem(name, name)
-            self.cmb_vials_rack.addItem(name, name)
+            self.cmb_rack.addItem(name, name)
 
         if self._rack_names:
-            self.cmb_fast_rack.setCurrentIndex(1)
-            self.cmb_vials_rack.setCurrentIndex(1)
+            self.cmb_rack.setCurrentIndex(1)
 
     def _load_syringe_list(self) -> None:
         self.cmb_syringe.clear()
@@ -303,7 +289,7 @@ class CalibrationTab(QWidget):
 
     def _on_generate_fast(self) -> None:
         try:
-            rack_name = self._selected_rack_name(self.cmb_fast_rack)
+            rack_name = self._selected_rack_name(self.cmb_rack)
             x = float(self.spn_fast_x.value())
             y = float(self.spn_fast_y.value())
             pause_ms = int(round(float(self.spn_fast_pause.value()) * 1000.0))
@@ -320,7 +306,7 @@ class CalibrationTab(QWidget):
                 pg.home()
 
                 if initial_flush:
-                    flush_vol = min(0.5 * float(pg.max_volume_ul), float(pg.max_volume_ul))
+                    flush_vol = pg.max_volume_ul
                     pg.flush(flush_vol, repeats=3, solvent_idx=0, solvent_id=solvent_id)
 
                 start = 0.1 * float(pg.max_volume_ul)
@@ -351,7 +337,7 @@ class CalibrationTab(QWidget):
 
     def _on_generate_vials(self) -> None:
         try:
-            rack_name = self._selected_rack_name(self.cmb_vials_rack, require=True)
+            rack_name = self._selected_rack_name(self.cmb_rack, require=True)
             n10 = int(self.spn_10.value())
             n50 = int(self.spn_50.value())
             n100 = int(self.spn_100.value())
@@ -369,7 +355,7 @@ class CalibrationTab(QWidget):
                 pg.home()
 
                 if initial_flush:
-                    flush_vol = min(500.0, float(pg.max_volume_ul))
+                    flush_vol = pg.max_volume_ul
                     pg.flush(flush_vol, repeats=3, solvent_idx=0, solvent_id=solvent_id)
 
                 volumes = [0.1, 0.5, 1.0]

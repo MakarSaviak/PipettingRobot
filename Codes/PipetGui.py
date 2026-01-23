@@ -41,8 +41,8 @@ class PipetGuiWindow(QMainWindow):
         )
 
         self.tabs.addTab(self.gcode_tab, "G-code")
-        self.tabs.addTab(self.calibration_tab, "Calibration")
         self.tabs.addTab(self.db_tab, "Syringes and Solvents")
+        self.tabs.addTab(self.calibration_tab, "Calibration")
 
         self._apply_style()
 

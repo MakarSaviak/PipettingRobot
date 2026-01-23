@@ -155,12 +155,10 @@ class CalibrationTab(QWidget):
         layout.addLayout(form)
 
         self.chk_vials_flush = QCheckBox("Initial flush")
-        self.chk_vials_leading_air = QCheckBox("Leading air gap")
         self.chk_vials_non_contact = QCheckBox("Non-contact dispense (use Z_slow)")
 
         opts = QHBoxLayout()
         opts.addWidget(self.chk_vials_flush)
-        opts.addWidget(self.chk_vials_leading_air)
         opts.addWidget(self.chk_vials_non_contact)
         opts.addStretch(1)
         layout.addLayout(opts)
@@ -348,7 +346,6 @@ class CalibrationTab(QWidget):
             n50 = int(self.spn_50.value())
             n100 = int(self.spn_100.value())
             initial_flush = self.chk_vials_flush.isChecked()
-            leading_air = self.chk_vials_leading_air.isChecked()
             non_contact = self.chk_vials_non_contact.isChecked()
 
             out_path = self._pick_gcode_path("calibration_vials.gcode")
@@ -384,13 +381,6 @@ class CalibrationTab(QWidget):
                     for _ in range(count):
                         volume = frac * float(pg.max_volume_ul)
                         pg.remove_from_vial(sx, sy, volume, solvent_id, z_min=z_min_solvent)
-
-                        if leading_air:
-                            air_gap = 0.1 * volume
-                            disp = pg.displacement(air_gap, solvent_id)
-                            pg.g.relative()
-                            pg.g.move(A=disp, F=pg.Fa_pull)
-                            pg.g.absolute()
 
                         x, y = vial_positions[current_vial]
                         z_min = z_min_vials[current_vial]

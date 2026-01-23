@@ -6,6 +6,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QTabWidget
 
 from .db import create_db_and_tables
+from .gui.calibration_tab import CalibrationTab
 from .gui.db_tab import DbTab
 from .gui.gcode_tab import GCodeTab
 
@@ -30,9 +31,17 @@ class PipetGuiWindow(QMainWindow):
             )
 
         self.gcode_tab = GCodeTab(self)
-        self.db_tab = DbTab(self, on_syringe_changed=self.gcode_tab.refresh_syringe_list)
+        self.calibration_tab = CalibrationTab(self)
+        self.db_tab = DbTab(
+            self,
+            on_syringe_changed=lambda: (
+                self.gcode_tab.refresh_syringe_list(),
+                self.calibration_tab.refresh_syringe_list(),
+            ),
+        )
 
         self.tabs.addTab(self.gcode_tab, "G-code")
+        self.tabs.addTab(self.calibration_tab, "Calibration")
         self.tabs.addTab(self.db_tab, "Syringes and Solvents")
 
         self._apply_style()
@@ -41,6 +50,7 @@ class PipetGuiWindow(QMainWindow):
         base_style = """
             QMainWindow { background: #0f1115; }
             QLabel { color: #e9ecf1; }
+            QCheckBox { color: #e9ecf1; }
             QLineEdit, QComboBox, QSpinBox, QListWidget, QTextEdit, QTableWidget {
                 background: #151a22;
                 color: #e9ecf1;

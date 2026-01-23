@@ -177,10 +177,10 @@ class DbTab(QWidget):
             icon_path = (Path(__file__).resolve().parent / "check_white.svg").as_posix()
             self.tbl_links.setStyleSheet(
                 "QTableWidget::indicator {"
-                "  width: 14px; height: 14px;"
-                "  border: 1px solid #9aa4b2;"
-                "  background: #1c2433;"
-                "}"
+                 "  width: 16px; height: 16px;"
+                 "  border: 1px solid #9aa4b2;"
+                 "  border-radius: 4px;"
+                 "}"
                 f"QTableWidget::indicator:checked {{ image: url({icon_path}); }}"
             )
         self.tbl_links.itemChanged.connect(self._on_link_table_changed)

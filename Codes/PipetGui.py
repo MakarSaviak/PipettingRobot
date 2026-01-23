@@ -44,7 +44,15 @@ class PipetGuiWindow(QMainWindow):
         self.tabs.addTab(self.db_tab, "Syringes and Solvents")
         self.tabs.addTab(self.calibration_tab, "Calibration")
 
+        # Keep calibration syringe selection in sync with the G-code tab.
+        self._sync_calibration_syringe()
+        self.gcode_tab.cmb_syringe.currentIndexChanged.connect(self._sync_calibration_syringe)
+
         self._apply_style()
+
+    def _sync_calibration_syringe(self, *_):
+        syringe_id = self.gcode_tab.cmb_syringe.currentData()
+        self.calibration_tab.set_selected_syringe_id(syringe_id)
 
     def _apply_style(self) -> None:
         base_style = """

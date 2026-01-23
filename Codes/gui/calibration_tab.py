@@ -139,15 +139,15 @@ class CalibrationTab(QWidget):
 
         self.spn_10 = QSpinBox()
         self.spn_10.setRange(0, 1000000)
-        self.spn_10.setValue(0)
+        self.spn_10.setValue(3)
 
         self.spn_50 = QSpinBox()
         self.spn_50.setRange(0, 1000000)
-        self.spn_50.setValue(0)
+        self.spn_50.setValue(3)
 
         self.spn_100 = QSpinBox()
         self.spn_100.setRange(0, 1000000)
-        self.spn_100.setValue(0)
+        self.spn_100.setValue(3)
 
         form.addRow("Vials @ 10% volume:", self.spn_10)
         form.addRow("Vials @ 50% volume:", self.spn_50)
@@ -155,7 +155,9 @@ class CalibrationTab(QWidget):
         layout.addLayout(form)
 
         self.chk_vials_flush = QCheckBox("Initial flush")
+        self.chk_vials_flush.setChecked(True)
         self.chk_vials_non_contact = QCheckBox("Non-contact dispense (use Z_slow)")
+        self.chk_vials_non_contact.setChecked(True)
 
         opts = QHBoxLayout()
         opts.addWidget(self.chk_vials_flush)
@@ -193,6 +195,7 @@ class CalibrationTab(QWidget):
 
         if self._rack_names:
             self.cmb_fast_rack.setCurrentIndex(1)
+            self.cmb_vials_rack.setCurrentIndex(1)
 
     def _load_syringe_list(self) -> None:
         self.cmb_syringe.clear()
@@ -211,6 +214,13 @@ class CalibrationTab(QWidget):
 
     def refresh_syringe_list(self) -> None:
         self._load_syringe_list()
+
+    def set_selected_syringe_id(self, syringe_id: int | None) -> None:
+        if syringe_id is None:
+            return
+        idx = self.cmb_syringe.findData(int(syringe_id))
+        if idx >= 0:
+            self.cmb_syringe.setCurrentIndex(idx)
 
     # ---------------- Helpers ----------------
 

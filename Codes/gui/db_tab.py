@@ -172,7 +172,7 @@ class DbTab(QWidget):
         self.tbl_links.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         self.tbl_links.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         self.tbl_links.verticalHeader().setVisible(False)
-        self.tbl_links.verticalHeader().setDefaultSectionSize(26)
+        self.tbl_links.verticalHeader().setDefaultSectionSize(32)
         if sys.platform.startswith("win"):
             icon_path = (Path(__file__).resolve().parent / "check_white.svg").as_posix()
             self.tbl_links.setStyleSheet(
@@ -277,7 +277,7 @@ class DbTab(QWidget):
             self.tbl_links.setItem(row, 0, self._set_editable_item(str(link.syringe_id)))
             self.tbl_links.setItem(row, 1, self._set_editable_item(str(link.solvent_id)))
             calibrated_item = QTableWidgetItem()
-            calibrated_item.setFlags(calibrated_item.flags() | Qt.ItemIsUserCheckable)
+            calibrated_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
             calibrated_item.setCheckState(Qt.Checked if link.calibrated else Qt.Unchecked)
             self.tbl_links.setItem(row, 2, calibrated_item)
             self.tbl_links.setItem(row, 3, self._set_editable_item(str(link.backlash_correction)))
@@ -322,7 +322,7 @@ class DbTab(QWidget):
         self.tbl_links.setItem(row, 0, self._set_editable_item(""))
         self.tbl_links.setItem(row, 1, self._set_editable_item(""))
         calibrated_item = QTableWidgetItem()
-        calibrated_item.setFlags(calibrated_item.flags() | Qt.ItemIsUserCheckable)
+        calibrated_item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled | Qt.ItemIsSelectable)
         calibrated_item.setCheckState(Qt.Unchecked)
         self.tbl_links.setItem(row, 2, calibrated_item)
         self.tbl_links.setItem(row, 3, self._set_editable_item("0.0"))

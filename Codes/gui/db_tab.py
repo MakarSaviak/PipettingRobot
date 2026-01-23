@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Callable
 from datetime import datetime
+from pathlib import Path
+import sys
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
@@ -171,6 +173,16 @@ class DbTab(QWidget):
         self.tbl_links.horizontalHeader().setSectionResizeMode(5, QHeaderView.Stretch)
         self.tbl_links.verticalHeader().setVisible(False)
         self.tbl_links.verticalHeader().setDefaultSectionSize(26)
+        if sys.platform.startswith("win"):
+            icon_path = (Path(__file__).resolve().parent / "check_white.svg").as_posix()
+            self.tbl_links.setStyleSheet(
+                "QTableWidget::indicator {"
+                "  width: 14px; height: 14px;"
+                "  border: 1px solid #9aa4b2;"
+                "  background: #1c2433;"
+                "}"
+                f"QTableWidget::indicator:checked {{ image: url({icon_path}); }}"
+            )
         self.tbl_links.itemChanged.connect(self._on_link_table_changed)
         self.tbl_links.selectionModel().selectionChanged.connect(self._update_delete_button)
         self.tbl_links.setItemDelegateForColumn(5, _SincePlaceholderDelegate(self.tbl_links))

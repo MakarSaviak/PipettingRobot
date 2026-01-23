@@ -72,8 +72,8 @@ class CalibrationTab(QWidget):
     def _build_fast_tab(self) -> None:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 6, 12, 12)
+        layout.setSpacing(6)
 
         header = QLabel("Same vial (fast)")
         header.setFont(QFont("Segoe UI", 12, QFont.Bold))
@@ -121,8 +121,8 @@ class CalibrationTab(QWidget):
     def _build_vials_tab(self) -> None:
         tab = QWidget()
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.setSpacing(10)
+        layout.setContentsMargins(12, 6, 12, 12)
+        layout.setSpacing(6)
 
         header = QLabel("Different vials")
         header.setFont(QFont("Segoe UI", 12, QFont.Bold))

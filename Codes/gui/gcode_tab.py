@@ -444,7 +444,7 @@ class GCodeTab(QWidget):
             return
         if not path.lower().endswith(".xlsx"):
             path += ".xlsx"
-        self.edt_template_path.setText(path)
+        self.edt_template_path.setText(str(Path(path)))
 
     def _pick_program_path(self, *_) -> None:
         csv_dir = self._base_dir.parent / "csv"
@@ -452,7 +452,9 @@ class GCodeTab(QWidget):
         path, _ = QFileDialog.getOpenFileName(self, "Open Excel program", start_dir, "Excel files (*.xlsx)")
         if not path:
             return
-        self.edt_program_path.setText(path)
+        self.edt_program_path.setText(str(Path(path)))
+        suggested = str(Path(path).with_suffix(".gcode"))
+        self.edt_gcode_path.setText(suggested)
 
     def _pick_gcode_path(self, *_) -> None:
         gcode_dir = self._base_dir.parent / "G-codes"
@@ -462,7 +464,7 @@ class GCodeTab(QWidget):
             return
         if not path.lower().endswith(".gcode"):
             path += ".gcode"
-        self.edt_gcode_path.setText(path)
+        self.edt_gcode_path.setText(str(Path(path)))
 
     # ---------------- Core: build Setup/Pipet ----------------
 
@@ -525,6 +527,8 @@ class GCodeTab(QWidget):
             ix = InputXlsx(pipet=pg)
             ix.create_empty_table(out_path)
 
+            self.edt_program_path.setText(str(out_path))
+            self.edt_gcode_path.setText(str(out_path.with_suffix(".gcode")))
             self._log(f"[OK] Template written: {out_path}")
             QMessageBox.information(self, "Done", f"Excel template saved:\n{out_path}")
 
@@ -543,10 +547,9 @@ class GCodeTab(QWidget):
 
             out = self.edt_gcode_path.text().strip()
             if not out:
-                self._pick_gcode_path()
-                out = self.edt_gcode_path.text().strip()
-                if not out:
-                    return
+                suggested = str(Path(xlsx).with_suffix(".gcode"))
+                self.edt_gcode_path.setText(suggested)
+                out = suggested
 
             xlsx_path = Path(xlsx)
             if not xlsx_path.exists():

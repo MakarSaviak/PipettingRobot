@@ -59,13 +59,14 @@ class PipetGuiWindow(QMainWindow):
             QMainWindow { background: #0f1115; }
             QLabel { color: #e9ecf1; }
             QCheckBox { color: #e9ecf1; }
-            QLineEdit, QComboBox, QSpinBox, QListWidget, QTextEdit, QTableWidget {
+            QLineEdit, QComboBox, QSpinBox, QDoubleSpinBox, QAbstractSpinBox, QListWidget, QTextEdit, QTableWidget {
                 background: #151a22;
                 color: #e9ecf1;
                 border: 1px solid #263042;
                 border-radius: 10px;
                 padding: 8px;
-                selection-background-color: #2b3b55;
+                selection-background-color: rgba(67, 87, 117, 0.25);
+                selection-color: #e9ecf1;
             }
             QTableWidget::item:selected { background: #2b3b55; }
             QComboBox::drop-down { border: 0px; width: 24px; }

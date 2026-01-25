@@ -6,7 +6,7 @@ import re
 
 import numpy as np
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QCheckBox,
@@ -21,6 +21,8 @@ from PySide6.QtWidgets import (
     QPushButton,
     QSizePolicy,
     QSpinBox,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -48,6 +50,34 @@ class _EvaluationWidgets:
     lbl_error: QLabel
 
 
+class _MassPlaceholderDelegate(QStyledItemDelegate):
+    def __init__(self, owner: "CalibrationTab", parent: QWidget | None = None):
+        super().__init__(parent)
+        self._owner = owner
+
+    def paint(self, painter, option, index):  # type: ignore[override]
+        opt = QStyleOptionViewItem(option)
+        self.initStyleOption(opt, index)
+        super().paint(painter, opt, index)
+
+        value = index.data(Qt.DisplayRole)
+        if value is not None and str(value).strip() != "":
+            return
+
+        placeholder = self._owner._placeholder_mass_text(index.row())
+        if not placeholder:
+            return
+
+        painter.save()
+        font = opt.font
+        font.setItalic(True)
+        painter.setFont(font)
+        painter.setPen(QColor(140, 150, 165))
+        rect = option.rect.adjusted(4, 0, -4, 0)
+        painter.drawText(rect, Qt.AlignCenter, placeholder)
+        painter.restore()
+
+
 class CalibrationTab(QWidget):
     _MASS_SUB_RE = re.compile(
         r"^\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*-\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*$"
@@ -66,6 +96,8 @@ class CalibrationTab(QWidget):
         self._eval_sections: list[_EvaluationWidgets] = []
         self._current_cf: float | None = None
         self._current_bc: float | None = None
+        self._current_density: float | None = None
+        self._eval_volumes: list[float] = []
 
         self._build_ui()
         self._load_config_lists()
@@ -194,16 +226,19 @@ class CalibrationTab(QWidget):
         self.spn_fast_x.setRange(-1e6, 1e6)
         self.spn_fast_x.setDecimals(3)
         self.spn_fast_x.setValue(10.0)
+        self.spn_fast_x.setMinimumHeight(32)
 
         self.spn_fast_y = QDoubleSpinBox()
         self.spn_fast_y.setRange(-1e6, 1e6)
         self.spn_fast_y.setDecimals(3)
         self.spn_fast_y.setValue(185.0)
+        self.spn_fast_y.setMinimumHeight(32)
 
         self.spn_fast_pause = QDoubleSpinBox()
         self.spn_fast_pause.setRange(0.0, 1e6)
         self.spn_fast_pause.setDecimals(3)
         self.spn_fast_pause.setValue(10.0)
+        self.spn_fast_pause.setMinimumHeight(32)
 
         coord_row = QHBoxLayout()
         self.chk_fast_flush = QCheckBox("Initial flush (3×)")
@@ -283,11 +318,14 @@ class CalibrationTab(QWidget):
         table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         table.verticalHeader().setDefaultSectionSize(28)
         table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        table.setItemDelegate(_MassPlaceholderDelegate(self, table))
         card_layout.addWidget(table, 1)
 
         outputs = QHBoxLayout()
-        lbl_cf_new = QLabel("CF_new (mm/uL) = —")
-        lbl_bc_new = QLabel("BC_new (mm) = —")
+        lbl_cf_new = QLabel("CF<sub>new</sub> (mm/uL) = —")
+        lbl_bc_new = QLabel("BC<sub>new</sub> (mm) = —")
+        lbl_cf_new.setTextFormat(Qt.RichText)
+        lbl_bc_new.setTextFormat(Qt.RichText)
         lbl_error = QLabel("Error (mean abs %) = —")
         outputs.addWidget(lbl_cf_new)
         outputs.addSpacing(12)
@@ -333,6 +371,7 @@ class CalibrationTab(QWidget):
             volumes = np.array([start_ul], dtype=float)
         else:
             volumes = np.linspace(start_ul, end_ul, num=datapoints)
+        self._eval_volumes = [float(v) for v in volumes]
 
         row_labels = [f"{v:.2f} uL" for v in volumes]
         col_labels = [f"Rep {i + 1}" for i in range(repeats)]
@@ -340,10 +379,14 @@ class CalibrationTab(QWidget):
         for section in self._eval_sections:
             table = section.table
             table.blockSignals(True)
+            table.setUpdatesEnabled(False)
             table.setRowCount(datapoints)
             table.setColumnCount(repeats)
             table.setHorizontalHeaderLabels(col_labels)
             table.setVerticalHeaderLabels(row_labels)
+            header = table.horizontalHeader()
+            header.setSectionResizeMode(QHeaderView.Stretch)
+            header.setStretchLastSection(True)
             for row in range(datapoints):
                 for col in range(repeats):
                     item = table.item(row, col)
@@ -351,7 +394,10 @@ class CalibrationTab(QWidget):
                         item = QTableWidgetItem("")
                         item.setTextAlignment(Qt.AlignCenter)
                         table.setItem(row, col, item)
+            header.resizeSections(QHeaderView.Stretch)
+            table.setUpdatesEnabled(True)
             table.blockSignals(False)
+            table.viewport().update()
 
     def _clear_eval_table(self, table: QTableWidget) -> None:
         for row in range(table.rowCount()):
@@ -363,6 +409,22 @@ class CalibrationTab(QWidget):
                     table.setItem(row, col, item)
                 else:
                     item.setText("")
+        table.viewport().update()
+
+    def _refresh_eval_placeholders(self) -> None:
+        for section in self._eval_sections:
+            section.table.viewport().update()
+
+    def _placeholder_mass_text(self, row: int) -> str:
+        if row < 0 or row >= len(self._eval_volumes):
+            return ""
+        if self._current_density is None:
+            return ""
+        rho = self._current_density
+        if rho <= 0:
+            return ""
+        mass_g = (self._eval_volumes[row] * rho) / 1000.0
+        return f"{mass_g:.4f}"
 
     def _parse_mass_value(self, text: str) -> float:
         value = text.strip().replace("−", "-")
@@ -475,8 +537,8 @@ class CalibrationTab(QWidget):
             error_pct = np.abs(mean_ul - volumes) / volumes * 100.0
             mean_error = float(np.mean(error_pct))
 
-            lbl_cf_new.setText(f"CF_new (mm/uL) = {cf_new:.6f}")
-            lbl_bc_new.setText(f"BC_new (mm) = {bc_new:.6f}")
+            lbl_cf_new.setText(f"CF<sub>new</sub> (mm/uL) = {cf_new:.6f}")
+            lbl_bc_new.setText(f"BC<sub>new</sub> (mm) = {bc_new:.6f}")
             lbl_error.setText(f"Error (mean abs %) = {mean_error:.2f}")
 
             self._log_eval_errors(context, volumes, mean_ul, error_pct)
@@ -680,7 +742,9 @@ class CalibrationTab(QWidget):
         if s_id is None:
             self._current_cf = None
             self._current_bc = None
+            self._current_density = None
             self._set_cf_bc_labels(None, None)
+            self._refresh_eval_placeholders()
             return
 
         try:
@@ -689,6 +753,14 @@ class CalibrationTab(QWidget):
             syringe = None
 
         solvent_id = self._current_solvent_id()
+        self._current_density = None
+        if solvent_id is not None:
+            try:
+                solvent = Solvent.get_by_id(int(solvent_id))
+                if solvent is not None and solvent.density_g_per_ml is not None:
+                    self._current_density = float(solvent.density_g_per_ml)
+            except Exception:
+                self._current_density = None
 
         link = None
         if solvent_id is not None:
@@ -701,13 +773,14 @@ class CalibrationTab(QWidget):
         cf_value = None
         bc_value = None
         if syringe is not None:
-            if link is not None and link.real_correlation_factor is not None:
-                cf_value = float(link.real_correlation_factor)
-            else:
-                try:
-                    cf_value = float(syringe.theoretical_correlation_factor)
-                except Exception:
-                    cf_value = None
+            if link is not None:
+                if link.real_correlation_factor is not None:
+                    cf_value = float(link.real_correlation_factor)
+                else:
+                    try:
+                        cf_value = float(syringe.theoretical_correlation_factor)
+                    except Exception:
+                        cf_value = None
 
             if link is not None:
                 try:
@@ -727,6 +800,7 @@ class CalibrationTab(QWidget):
         self._current_bc = bc_value
         self._set_cf_bc_labels(cf_value, bc_value)
         self._refresh_eval_tables()
+        self._refresh_eval_placeholders()
 
     def _pick_gcode_path(self, default_name: str) -> Path | None:
         gcode_dir = self._base_dir.parent / "G-codes"

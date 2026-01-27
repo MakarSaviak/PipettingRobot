@@ -48,8 +48,6 @@ class Rack(BaseModel):
         # column-by-column fill
         col = idx // int(n_rows)
         row = idx % int(n_rows)
-        if kind == "solvent":
-            row = (int(n_rows) - 1) - row
 
         x = x0 + col * dx
         y = y0 + row * dy

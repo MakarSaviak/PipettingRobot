@@ -453,7 +453,7 @@ class GCodeTab(QWidget):
         if not path:
             return
         self.edt_program_path.setText(str(Path(path)))
-        suggested = str(Path(path).with_suffix(".gcode"))
+        suggested = str(self._default_gcode_path(Path(path)))
         self.edt_gcode_path.setText(suggested)
 
     def _pick_gcode_path(self, *_) -> None:
@@ -528,7 +528,7 @@ class GCodeTab(QWidget):
             ix.create_empty_table(out_path)
 
             self.edt_program_path.setText(str(out_path))
-            self.edt_gcode_path.setText(str(out_path.with_suffix(".gcode")))
+            self.edt_gcode_path.setText(str(self._default_gcode_path(out_path)))
             self._log(f"[OK] Template written: {out_path}")
             QMessageBox.information(self, "Done", f"Excel template saved:\n{out_path}")
 
@@ -547,7 +547,7 @@ class GCodeTab(QWidget):
 
             out = self.edt_gcode_path.text().strip()
             if not out:
-                suggested = str(Path(xlsx).with_suffix(".gcode"))
+                suggested = str(self._default_gcode_path(Path(xlsx)))
                 self.edt_gcode_path.setText(suggested)
                 out = suggested
 
@@ -575,3 +575,7 @@ class GCodeTab(QWidget):
     def _log(self, msg: str) -> None:
         self.txt_log.append(msg)
         self.txt_log.verticalScrollBar().setValue(self.txt_log.verticalScrollBar().maximum())
+
+    def _default_gcode_path(self, xlsx_path: Path) -> Path:
+        gcode_dir = self._base_dir.parent / "G-codes"
+        return gcode_dir / f"{xlsx_path.stem}.gcode"

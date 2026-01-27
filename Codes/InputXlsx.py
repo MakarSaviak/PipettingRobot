@@ -80,7 +80,7 @@ class InputXlsx(BaseModel):
 
         idx = start_index
         for col in range(1, n_cols + 1):
-            for row in range(1, n_rows + 1):
+            for row in range(n_rows, 0, -1):
                 cell = ws.cell(row=row, column=col, value=None)  # user writes solvent_id here
 
                 cell.fill = LIGHT_ORANGE
@@ -112,7 +112,7 @@ class InputXlsx(BaseModel):
         # --- vial grid with global vial indices ---
         idx = start_index
         for col in range(1, n_cols + 1):
-            for row in range(1, n_rows + 1):
+            for row in range(n_rows, 0, -1):
                 cell = ws.cell(row=row, column=col, value=idx)
                 cell.fill = LIGHT_BLUE
                 cell.border = GRID_BORDER
@@ -413,7 +413,7 @@ class InputXlsx(BaseModel):
             n_cols = int(rack.solvent_columns)
 
             for col in range(1, n_cols + 1):
-                for row in range(1, n_rows + 1):
+                for row in range(n_rows, 0, -1):
                     cell = ws.cell(row=row, column=col)
                     s_id = self._as_int(cell.value, where=f"{name}!{cell.coordinate}")
                     if s_id is None:
@@ -481,7 +481,7 @@ class InputXlsx(BaseModel):
             n_cols = int(rack.solvent_columns)
 
             for col in range(1, n_cols + 1):
-                for row in range(1, n_rows + 1):
+                for row in range(n_rows, 0, -1):
                     cell = ws.cell(row=row, column=col)
                     s_id = self._as_int(cell.value, where=f"{rack.name}_solvents!{cell.coordinate}")
                     mapping.append(s_id)

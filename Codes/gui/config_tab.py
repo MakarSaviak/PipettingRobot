@@ -3,7 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QFont
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -12,11 +13,13 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QListWidget,
+    QMenu,
     QMessageBox,
     QPushButton,
-    QPlainTextEdit,
     QSpinBox,
     QTabWidget,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -44,6 +47,8 @@ class ConfigTab(QWidget):
         self._rack_paths: dict[str, Path] = {}
         self._machine_names: list[str] = []
         self._rack_names: list[str] = []
+        self._setup_rack_actions: dict[str, QAction] = {}
+        self._setup_rack_defs: dict[str, Rack] = {}
 
         self._loading_setup = False
         self._loading_machine = False
@@ -75,6 +80,17 @@ class ConfigTab(QWidget):
         f.setObjectName("card")
         return f
 
+    def _row_fields(self, *pairs: tuple[str, QWidget]) -> QWidget:
+        row = QWidget()
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+        for label, widget in pairs:
+            layout.addWidget(QLabel(label))
+            layout.addWidget(widget)
+        layout.addStretch(1)
+        return row
+
     def _build_setup_tab(self) -> None:
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -94,6 +110,7 @@ class ConfigTab(QWidget):
 
         card = self._card()
         form = QFormLayout(card)
+        form.setContentsMargins(12, 12, 12, 12)
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(8)
 
@@ -106,10 +123,40 @@ class ConfigTab(QWidget):
         self.cmb_setup_machine = QComboBox()
         form.addRow("Machine", self.cmb_setup_machine)
 
-        self.txt_setup_racks = QPlainTextEdit()
-        self.txt_setup_racks.setPlaceholderText("One rack name per line (order matters)")
-        self.txt_setup_racks.setMinimumHeight(90)
-        form.addRow("Racks", self.txt_setup_racks)
+        racks_row = QWidget()
+        racks_row_layout = QVBoxLayout(racks_row)
+        racks_row_layout.setContentsMargins(0, 0, 0, 0)
+        racks_row_layout.setSpacing(6)
+
+        top_rack_bar = QHBoxLayout()
+        top_rack_bar.setContentsMargins(0, 0, 0, 0)
+        top_rack_bar.setSpacing(8)
+
+        self.btn_setup_racks_menu = QToolButton()
+        self.btn_setup_racks_menu.setText("Select racks…")
+        self.btn_setup_racks_menu.setPopupMode(QToolButton.InstantPopup)
+        self.setup_racks_menu = QMenu(self)
+        self.btn_setup_racks_menu.setMenu(self.setup_racks_menu)
+
+        self.btn_setup_racks_clear = QPushButton("Clear")
+        self.btn_setup_racks_clear.clicked.connect(self._clear_setup_racks)
+
+        top_rack_bar.addWidget(self.btn_setup_racks_menu, 1)
+        top_rack_bar.addWidget(self.btn_setup_racks_clear)
+        racks_row_layout.addLayout(top_rack_bar)
+
+        self.lst_setup_racks = QListWidget()
+        self.lst_setup_racks.setDragDropMode(QListWidget.InternalMove)
+        self.lst_setup_racks.setDefaultDropAction(Qt.MoveAction)
+        self.lst_setup_racks.setMinimumHeight(140)
+        self.lst_setup_racks.model().rowsMoved.connect(lambda *_: self._update_setup_summary())
+        racks_row_layout.addWidget(self.lst_setup_racks)
+
+        self.lbl_setup_summary = QLabel("No racks selected.")
+        self.lbl_setup_summary.setWordWrap(True)
+        racks_row_layout.addWidget(self.lbl_setup_summary)
+
+        form.addRow("Racks (order matters)", racks_row)
 
         layout.addWidget(card)
 
@@ -146,12 +193,11 @@ class ConfigTab(QWidget):
         layout.addLayout(select_row)
 
         card = self._card()
-        form = QFormLayout(card)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(8)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setSpacing(8)
 
         self.edt_machine_name = QLineEdit()
-        form.addRow("Name", self.edt_machine_name)
 
         self.spn_z_min_limit = self._float_box(minimum=-1e6, maximum=1e6)
         self.spn_z_max_limit = self._float_box(minimum=-1e6, maximum=1e6)
@@ -167,18 +213,26 @@ class ConfigTab(QWidget):
         self.spn_rest_x = self._float_box(minimum=0.0, maximum=1e6, decimals=3)
         self.spn_rest_y = self._float_box(minimum=0.0, maximum=1e6, decimals=3)
 
-        form.addRow("z_min_limit", self.spn_z_min_limit)
-        form.addRow("z_max_limit", self.spn_z_max_limit)
-        form.addRow("z_min", self.spn_z_min)
-        form.addRow("z_max", self.spn_z_max)
-        form.addRow("z_slow", self.spn_z_slow)
-        form.addRow("Fz", self.spn_fz)
-        form.addRow("Fxy", self.spn_fxy)
-        form.addRow("Fa_push", self.spn_fa_push)
-        form.addRow("Fa_push_slow", self.spn_fa_push_slow)
-        form.addRow("Fa_pull", self.spn_fa_pull)
-        form.addRow("rest_x", self.spn_rest_x)
-        form.addRow("rest_y", self.spn_rest_y)
+        card_layout.addWidget(self._row_fields(("Name", self.edt_machine_name)))
+        card_layout.addWidget(
+            self._row_fields(
+                ("z_min_limit", self.spn_z_min_limit),
+                ("z_min", self.spn_z_min),
+                ("z_max", self.spn_z_max),
+                ("z_max_limit", self.spn_z_max_limit),
+            )
+        )
+        card_layout.addWidget(self._row_fields(("z_slow", self.spn_z_slow)))
+        card_layout.addWidget(
+            self._row_fields(
+                ("Fz", self.spn_fz),
+                ("Fxy", self.spn_fxy),
+                ("Fa_push", self.spn_fa_push),
+                ("Fa_push_slow", self.spn_fa_push_slow),
+                ("Fa_pull", self.spn_fa_pull),
+            )
+        )
+        card_layout.addWidget(self._row_fields(("rest_x", self.spn_rest_x), ("rest_y", self.spn_rest_y)))
 
         layout.addWidget(card)
 
@@ -215,12 +269,11 @@ class ConfigTab(QWidget):
         layout.addLayout(select_row)
 
         card = self._card()
-        form = QFormLayout(card)
-        form.setHorizontalSpacing(12)
-        form.setVerticalSpacing(8)
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 12, 12, 12)
+        card_layout.setSpacing(8)
 
         self.edt_rack_name = QLineEdit()
-        form.addRow("Name", self.edt_rack_name)
 
         self.spn_vial1_x = self._float_box(minimum=0.0, maximum=1e6)
         self.spn_vial1_y = self._float_box(minimum=0.0, maximum=1e6)
@@ -245,24 +298,38 @@ class ConfigTab(QWidget):
         self.spn_waste_x = self._float_box(minimum=0.0, maximum=1e6)
         self.spn_waste_y = self._float_box(minimum=0.0, maximum=1e6)
 
-        form.addRow("vial1_x", self.spn_vial1_x)
-        form.addRow("vial1_y", self.spn_vial1_y)
-        form.addRow("vial_dy", self.spn_vial_dy)
-        form.addRow("vial_dx", self.spn_vial_dx)
-        form.addRow("vial_rows", self.spn_vial_rows)
-        form.addRow("vial_columns", self.spn_vial_columns)
-        form.addRow("z_min_vials", self.edt_z_min_vials)
-
-        form.addRow("solvent1_x", self.spn_solvent1_x)
-        form.addRow("solvent1_y", self.spn_solvent1_y)
-        form.addRow("solvent_rows", self.spn_solvent_rows)
-        form.addRow("solvent_columns", self.spn_solvent_columns)
-        form.addRow("solvent_dy", self.edt_solvent_dy)
-        form.addRow("solvent_dx", self.edt_solvent_dx)
-        form.addRow("z_min_solvents", self.edt_z_min_solvents)
-
-        form.addRow("waste_x", self.spn_waste_x)
-        form.addRow("waste_y", self.spn_waste_y)
+        card_layout.addWidget(self._row_fields(("Name", self.edt_rack_name)))
+        card_layout.addWidget(
+            self._row_fields(
+                ("vial1_x", self.spn_vial1_x),
+                ("vial1_y", self.spn_vial1_y),
+                ("vial_dy", self.spn_vial_dy),
+                ("vial_dx", self.spn_vial_dx),
+            )
+        )
+        card_layout.addWidget(
+            self._row_fields(
+                ("vial_rows", self.spn_vial_rows),
+                ("vial_columns", self.spn_vial_columns),
+                ("z_min_vials", self.edt_z_min_vials),
+            )
+        )
+        card_layout.addWidget(
+            self._row_fields(
+                ("solvent1_x", self.spn_solvent1_x),
+                ("solvent1_y", self.spn_solvent1_y),
+                ("solvent_dy", self.edt_solvent_dy),
+                ("solvent_dx", self.edt_solvent_dx),
+            )
+        )
+        card_layout.addWidget(
+            self._row_fields(
+                ("solvent_rows", self.spn_solvent_rows),
+                ("solvent_columns", self.spn_solvent_columns),
+                ("z_min_solvents", self.edt_z_min_solvents),
+            )
+        )
+        card_layout.addWidget(self._row_fields(("waste_x", self.spn_waste_x), ("waste_y", self.spn_waste_y)))
 
         layout.addWidget(card)
 
@@ -397,6 +464,8 @@ class ConfigTab(QWidget):
                 names.append(name)
         self._rack_names = names
         self._populate_combo(self.cmb_rack_select, names, include_new=True, current_data=current)
+        self._setup_rack_defs.clear()
+        self._refresh_setup_rack_menu()
         if not names:
             self._start_new_rack()
 
@@ -434,7 +503,7 @@ class ConfigTab(QWidget):
             self.edt_setup_name.setText("")
             self.cmb_setup_syringe.setCurrentIndex(0)
             self.cmb_setup_machine.setCurrentIndex(0)
-            self.txt_setup_racks.setPlainText("")
+            self._set_selected_racks_in_order([])
             self._loading_setup = False
             return
 
@@ -463,9 +532,9 @@ class ConfigTab(QWidget):
 
         racks = data.get("racks") or []
         if isinstance(racks, list):
-            self.txt_setup_racks.setPlainText("\n".join(str(r) for r in racks))
+            self._set_selected_racks_in_order([str(r) for r in racks])
         else:
-            self.txt_setup_racks.setPlainText("")
+            self._set_selected_racks_in_order([])
 
         self._loading_setup = False
 
@@ -476,15 +545,138 @@ class ConfigTab(QWidget):
         else:
             self._apply_setup_data(None, new_mode=True)
 
-    def _parse_setup_racks(self) -> list[str]:
-        raw = self.txt_setup_racks.toPlainText()
-        items: list[str] = []
-        for line in raw.splitlines():
-            for part in line.split(","):
-                name = part.strip()
-                if name:
-                    items.append(name)
-        return items
+    def _refresh_setup_rack_menu(self) -> None:
+        if not hasattr(self, "setup_racks_menu"):
+            return
+
+        existing = self._selected_setup_rack_names_in_order()
+
+        self.setup_racks_menu.clear()
+
+        act_all = QAction("Select all", self)
+        act_all.triggered.connect(lambda *_: self._set_all_setup_racks_checked(True))
+        self.setup_racks_menu.addAction(act_all)
+
+        act_none = QAction("Select none", self)
+        act_none.triggered.connect(lambda *_: self._set_all_setup_racks_checked(False))
+        self.setup_racks_menu.addAction(act_none)
+
+        self.setup_racks_menu.addSeparator()
+
+        self._setup_rack_actions.clear()
+        for name in self._rack_names:
+            act = QAction(name, self)
+            act.setCheckable(True)
+            act.toggled.connect(lambda checked, n=name: self._on_setup_rack_toggled(n, checked))
+            self.setup_racks_menu.addAction(act)
+            self._setup_rack_actions[name] = act
+
+        filtered = [n for n in existing if n in self._setup_rack_actions]
+        self._set_selected_racks_in_order(filtered)
+        self._update_setup_racks_button_text()
+
+    def _set_all_setup_racks_checked(self, checked: bool) -> None:
+        for act in self._setup_rack_actions.values():
+            act.blockSignals(True)
+            act.setChecked(checked)
+            act.blockSignals(False)
+
+        self.lst_setup_racks.clear()
+        if checked:
+            for name in self._setup_rack_actions.keys():
+                self._add_setup_selected_rack(name)
+
+        self._update_setup_racks_button_text()
+        self._update_setup_summary()
+
+    def _on_setup_rack_toggled(self, rack_name: str, checked: bool) -> None:
+        if checked:
+            self._add_setup_selected_rack(rack_name)
+        else:
+            self._remove_setup_selected_rack(rack_name)
+        self._update_setup_racks_button_text()
+        self._update_setup_summary()
+
+    def _add_setup_selected_rack(self, rack_name: str) -> None:
+        for i in range(self.lst_setup_racks.count()):
+            if self.lst_setup_racks.item(i).text() == rack_name:
+                return
+        self.lst_setup_racks.addItem(rack_name)
+
+    def _remove_setup_selected_rack(self, rack_name: str) -> None:
+        for i in range(self.lst_setup_racks.count()):
+            if self.lst_setup_racks.item(i).text() == rack_name:
+                self.lst_setup_racks.takeItem(i)
+                return
+
+    def _clear_setup_racks(self, *_) -> None:
+        self.lst_setup_racks.clear()
+        for act in self._setup_rack_actions.values():
+            act.blockSignals(True)
+            act.setChecked(False)
+            act.blockSignals(False)
+        self._update_setup_racks_button_text()
+        self._update_setup_summary()
+
+    def _update_setup_racks_button_text(self) -> None:
+        n = self.lst_setup_racks.count()
+        self.btn_setup_racks_menu.setText(f"Select racks…  ({n} selected)")
+
+    def _selected_setup_rack_names_in_order(self) -> list[str]:
+        return [self.lst_setup_racks.item(i).text() for i in range(self.lst_setup_racks.count())]
+
+    def _set_selected_racks_in_order(self, rack_names: list[str]) -> None:
+        if not hasattr(self, "lst_setup_racks"):
+            return
+        self.lst_setup_racks.clear()
+        for act in self._setup_rack_actions.values():
+            act.blockSignals(True)
+            act.setChecked(False)
+            act.blockSignals(False)
+
+        for name in rack_names:
+            act = self._setup_rack_actions.get(name)
+            if act is None:
+                continue
+            act.blockSignals(True)
+            act.setChecked(True)
+            act.blockSignals(False)
+            self._add_setup_selected_rack(name)
+
+        self._update_setup_racks_button_text()
+        self._update_setup_summary()
+
+    def _update_setup_summary(self, *_) -> None:
+        if not hasattr(self, "lbl_setup_summary"):
+            return
+        names = self._selected_setup_rack_names_in_order()
+        if not names:
+            self.lbl_setup_summary.setText("No racks selected.")
+            return
+
+        total_vials = 0
+        total_solvents = 0
+        missing: list[str] = []
+
+        for name in names:
+            rack = self._setup_rack_defs.get(name)
+            if rack is None:
+                try:
+                    rack = load_model(Rack, name)
+                    self._setup_rack_defs[name] = rack
+                except Exception:
+                    missing.append(name)
+                    continue
+            total_vials += int(rack.vial_rows) * int(rack.vial_columns)
+            total_solvents += int(rack.solvent_rows) * int(rack.solvent_columns)
+
+        msg = (
+            f"Selected racks (in order): {', '.join(names)}\n"
+            f"Total vial slots: {total_vials} | Total solvent slots: {total_solvents}"
+        )
+        if missing:
+            msg += f"\nMissing/failed racks: {', '.join(missing)}"
+        self.lbl_setup_summary.setText(msg)
 
     def _save_setup(self) -> None:
         selected = self.cmb_setup_select.currentData()
@@ -514,7 +706,7 @@ class ConfigTab(QWidget):
             QMessageBox.warning(self, "Validation error", "Please select a machine.")
             return
 
-        racks = self._parse_setup_racks()
+        racks = self._selected_setup_rack_names_in_order()
         if not racks:
             QMessageBox.warning(self, "Validation error", "Please enter at least one rack.")
             return

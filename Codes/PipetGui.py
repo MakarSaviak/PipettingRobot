@@ -16,7 +16,7 @@ class PipetGuiWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("PipetGui")
-        self.resize(1080, 680)
+        self.resize(960, 640)
 
         self.tabs = QTabWidget(self)
         self.setCentralWidget(self.tabs)

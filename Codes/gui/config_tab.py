@@ -32,6 +32,7 @@ from ..Syringe import Syringe
 
 class ConfigTab(QWidget):
     NEW_ITEM = "__new__"
+    Z_MIN_SENTINEL = -1e9
 
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
@@ -114,13 +115,17 @@ class ConfigTab(QWidget):
         form.setHorizontalSpacing(12)
         form.setVerticalSpacing(8)
 
+        field_max_width = 260
         self.edt_setup_name = QLineEdit()
+        self.edt_setup_name.setMaximumWidth(field_max_width)
         form.addRow("Name", self.edt_setup_name)
 
         self.cmb_setup_syringe = QComboBox()
+        self.cmb_setup_syringe.setMaximumWidth(field_max_width)
         form.addRow("Syringe", self.cmb_setup_syringe)
 
         self.cmb_setup_machine = QComboBox()
+        self.cmb_setup_machine.setMaximumWidth(field_max_width)
         form.addRow("Machine", self.cmb_setup_machine)
 
         racks_row = QWidget()
@@ -134,15 +139,18 @@ class ConfigTab(QWidget):
 
         self.btn_setup_racks_menu = QToolButton()
         self.btn_setup_racks_menu.setText("Select racks…")
+        self.btn_setup_racks_menu.setMaximumWidth(field_max_width)
         self.btn_setup_racks_menu.setPopupMode(QToolButton.InstantPopup)
         self.setup_racks_menu = QMenu(self)
         self.btn_setup_racks_menu.setMenu(self.setup_racks_menu)
 
         self.btn_setup_racks_clear = QPushButton("Clear")
+        self.btn_setup_racks_clear.setFixedWidth(70)
         self.btn_setup_racks_clear.clicked.connect(self._clear_setup_racks)
 
-        top_rack_bar.addWidget(self.btn_setup_racks_menu, 1)
+        top_rack_bar.addWidget(self.btn_setup_racks_menu)
         top_rack_bar.addWidget(self.btn_setup_racks_clear)
+        top_rack_bar.addStretch(1)
         racks_row_layout.addLayout(top_rack_bar)
 
         self.lst_setup_racks = QListWidget()
@@ -281,19 +289,31 @@ class ConfigTab(QWidget):
         self.spn_vial_dx = self._float_box(minimum=0.0, maximum=1e6)
         self.spn_vial_rows = self._int_box(minimum=0, maximum=1000)
         self.spn_vial_columns = self._int_box(minimum=0, maximum=1000)
-        self.edt_z_min_vials = QLineEdit()
-        self.edt_z_min_vials.setPlaceholderText("blank = use machine z_min")
+        self.spn_z_min_vials = self._optional_float_box(
+            minimum=self.Z_MIN_SENTINEL,
+            maximum=1e6,
+            special_text="use machine z_min",
+        )
 
         self.spn_solvent1_x = self._float_box(minimum=0.0, maximum=1e6)
         self.spn_solvent1_y = self._float_box(minimum=0.0, maximum=1e6)
         self.spn_solvent_rows = self._int_box(minimum=0, maximum=1000)
         self.spn_solvent_columns = self._int_box(minimum=0, maximum=1000)
-        self.edt_solvent_dy = QLineEdit()
-        self.edt_solvent_dy.setPlaceholderText("blank = 0")
-        self.edt_solvent_dx = QLineEdit()
-        self.edt_solvent_dx.setPlaceholderText("blank = 0")
-        self.edt_z_min_solvents = QLineEdit()
-        self.edt_z_min_solvents.setPlaceholderText("blank = use machine z_min")
+        self.spn_solvent_dy = self._optional_float_box(
+            minimum=0.0,
+            maximum=1e6,
+            special_text="0",
+        )
+        self.spn_solvent_dx = self._optional_float_box(
+            minimum=0.0,
+            maximum=1e6,
+            special_text="0",
+        )
+        self.spn_z_min_solvents = self._optional_float_box(
+            minimum=self.Z_MIN_SENTINEL,
+            maximum=1e6,
+            special_text="use machine z_min",
+        )
 
         self.spn_waste_x = self._float_box(minimum=0.0, maximum=1e6)
         self.spn_waste_y = self._float_box(minimum=0.0, maximum=1e6)
@@ -311,22 +331,22 @@ class ConfigTab(QWidget):
             self._row_fields(
                 ("vial_rows", self.spn_vial_rows),
                 ("vial_columns", self.spn_vial_columns),
-                ("z_min_vials", self.edt_z_min_vials),
+                ("z_min_vials", self.spn_z_min_vials),
             )
         )
         card_layout.addWidget(
             self._row_fields(
                 ("solvent1_x", self.spn_solvent1_x),
                 ("solvent1_y", self.spn_solvent1_y),
-                ("solvent_dy", self.edt_solvent_dy),
-                ("solvent_dx", self.edt_solvent_dx),
+                ("solvent_dy", self.spn_solvent_dy),
+                ("solvent_dx", self.spn_solvent_dx),
             )
         )
         card_layout.addWidget(
             self._row_fields(
                 ("solvent_rows", self.spn_solvent_rows),
                 ("solvent_columns", self.spn_solvent_columns),
-                ("z_min_solvents", self.edt_z_min_solvents),
+                ("z_min_solvents", self.spn_z_min_solvents),
             )
         )
         card_layout.addWidget(self._row_fields(("waste_x", self.spn_waste_x), ("waste_y", self.spn_waste_y)))
@@ -369,6 +389,25 @@ class ConfigTab(QWidget):
         box = QSpinBox()
         box.setRange(minimum, maximum)
         box.setMinimumHeight(28)
+        return box
+
+    def _optional_float_box(
+        self,
+        *,
+        minimum: float,
+        maximum: float,
+        decimals: int = 3,
+        step: float = 0.1,
+        special_text: str | None = None,
+    ) -> QDoubleSpinBox:
+        box = QDoubleSpinBox()
+        box.setDecimals(decimals)
+        box.setRange(minimum, maximum)
+        box.setSingleStep(step)
+        box.setMinimumHeight(28)
+        if special_text is not None:
+            box.setSpecialValueText(special_text)
+            box.setValue(minimum)
         return box
 
     def _populate_combo(
@@ -957,10 +996,10 @@ class ConfigTab(QWidget):
                 self.spn_waste_y,
             ):
                 spin.setValue(0)
-            self.edt_z_min_vials.setText("")
-            self.edt_solvent_dy.setText("")
-            self.edt_solvent_dx.setText("")
-            self.edt_z_min_solvents.setText("")
+            self.spn_z_min_vials.setValue(self.Z_MIN_SENTINEL)
+            self.spn_solvent_dy.setValue(0.0)
+            self.spn_solvent_dx.setValue(0.0)
+            self.spn_z_min_solvents.setValue(self.Z_MIN_SENTINEL)
             self._loading_rack = False
             return
 
@@ -971,15 +1010,17 @@ class ConfigTab(QWidget):
         self.spn_vial_dx.setValue(float(rack.vial_dx))
         self.spn_vial_rows.setValue(int(rack.vial_rows))
         self.spn_vial_columns.setValue(int(rack.vial_columns))
-        self.edt_z_min_vials.setText("" if rack.z_min_vials is None else str(rack.z_min_vials))
+        self.spn_z_min_vials.setValue(self.Z_MIN_SENTINEL if rack.z_min_vials is None else float(rack.z_min_vials))
 
         self.spn_solvent1_x.setValue(float(rack.solvent1_x))
         self.spn_solvent1_y.setValue(float(rack.solvent1_y))
         self.spn_solvent_rows.setValue(int(rack.solvent_rows))
         self.spn_solvent_columns.setValue(int(rack.solvent_columns))
-        self.edt_solvent_dy.setText("" if rack.solvent_dy is None else str(rack.solvent_dy))
-        self.edt_solvent_dx.setText("" if rack.solvent_dx is None else str(rack.solvent_dx))
-        self.edt_z_min_solvents.setText("" if rack.z_min_solvents is None else str(rack.z_min_solvents))
+        self.spn_solvent_dy.setValue(0.0 if rack.solvent_dy is None else float(rack.solvent_dy))
+        self.spn_solvent_dx.setValue(0.0 if rack.solvent_dx is None else float(rack.solvent_dx))
+        self.spn_z_min_solvents.setValue(
+            self.Z_MIN_SENTINEL if rack.z_min_solvents is None else float(rack.z_min_solvents)
+        )
 
         self.spn_waste_x.setValue(float(rack.waste_x))
         self.spn_waste_y.setValue(float(rack.waste_y))
@@ -992,14 +1033,19 @@ class ConfigTab(QWidget):
         else:
             self._apply_rack_data(None, new_mode=True)
 
-    def _parse_optional_float(self, field: QLineEdit, label: str, *, positive: bool = False) -> float | None:
-        text = field.text().strip()
-        if not text:
+    def _optional_spin_value(
+        self,
+        field: QDoubleSpinBox,
+        label: str,
+        *,
+        none_if_min: bool,
+        positive: bool = False,
+    ) -> float | None:
+        value = float(field.value())
+        if none_if_min and value == float(field.minimum()):
             return None
-        try:
-            value = float(text)
-        except ValueError as e:
-            raise ValueError(f"{label} must be a valid number.") from e
+        if not none_if_min and value == 0.0:
+            return None
         if positive and value <= 0:
             raise ValueError(f"{label} must be > 0.")
         return value
@@ -1030,10 +1076,30 @@ class ConfigTab(QWidget):
             return
 
         try:
-            z_min_vials = self._parse_optional_float(self.edt_z_min_vials, "z_min_vials", positive=False)
-            z_min_solvents = self._parse_optional_float(self.edt_z_min_solvents, "z_min_solvents", positive=False)
-            solvent_dy = self._parse_optional_float(self.edt_solvent_dy, "solvent_dy", positive=True)
-            solvent_dx = self._parse_optional_float(self.edt_solvent_dx, "solvent_dx", positive=True)
+            z_min_vials = self._optional_spin_value(
+                self.spn_z_min_vials,
+                "z_min_vials",
+                none_if_min=True,
+                positive=False,
+            )
+            z_min_solvents = self._optional_spin_value(
+                self.spn_z_min_solvents,
+                "z_min_solvents",
+                none_if_min=True,
+                positive=False,
+            )
+            solvent_dy = self._optional_spin_value(
+                self.spn_solvent_dy,
+                "solvent_dy",
+                none_if_min=False,
+                positive=True,
+            )
+            solvent_dx = self._optional_spin_value(
+                self.spn_solvent_dx,
+                "solvent_dx",
+                none_if_min=False,
+                positive=True,
+            )
         except ValueError as e:
             QMessageBox.warning(self, "Validation error", str(e))
             return

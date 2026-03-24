@@ -215,6 +215,11 @@ class GCodeTab(QWidget):
     # ---------------- Config discovery ----------------
 
     def _load_config_lists(self) -> None:
+        current_setup = self.cmb_setup.currentData() if hasattr(self, "cmb_setup") else None
+        current_machine = self.cmb_machine.currentText() if hasattr(self, "cmb_machine") else None
+        current_syringe_id = self.cmb_syringe.currentData() if hasattr(self, "cmb_syringe") else None
+        current_racks = self._selected_rack_names_in_order() if hasattr(self, "lst_selected_racks") else []
+
         if not self._racks_dir.exists() or not self._machines_dir.exists():
             QMessageBox.critical(
                 self,
@@ -263,6 +268,24 @@ class GCodeTab(QWidget):
         self._update_racks_button_text()
         self._load_syringe_list()
         self._load_setup_list()
+
+        if current_setup is not None:
+            idx = self.cmb_setup.findData(current_setup)
+            if idx >= 0:
+                self.cmb_setup.setCurrentIndex(idx)
+                return
+
+        if current_machine:
+            idx = self.cmb_machine.findText(current_machine)
+            if idx >= 0:
+                self.cmb_machine.setCurrentIndex(idx)
+
+        if current_syringe_id is not None:
+            idx = self.cmb_syringe.findData(int(current_syringe_id))
+            if idx >= 0:
+                self.cmb_syringe.setCurrentIndex(idx)
+
+        self._set_selected_racks_in_order([name for name in current_racks if name in self._rack_actions])
 
     def _load_setup_list(self) -> None:
         self.cmb_setup.clear()
@@ -347,6 +370,9 @@ class GCodeTab(QWidget):
 
     def refresh_syringe_list(self) -> None:
         self._load_syringe_list()
+
+    def refresh_config_lists(self) -> None:
+        self._load_config_lists()
 
     def _selected_syringe_id(self) -> int:
         s_id = self.cmb_syringe.currentData()

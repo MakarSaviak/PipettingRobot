@@ -1324,14 +1324,14 @@ class ConfigTab(QWidget):
     # ---------------- Integration ----------------
 
     def _notify_config_changed(self) -> None:
-        parent = self.parent()
-        gcode_tab = getattr(parent, "gcode_tab", None)
-        if gcode_tab is not None and hasattr(gcode_tab, "_load_config_lists"):
+        host = self.window()
+        gcode_tab = getattr(host, "gcode_tab", None)
+        if gcode_tab is not None and hasattr(gcode_tab, "refresh_config_lists"):
             try:
-                gcode_tab._load_config_lists()
+                gcode_tab.refresh_config_lists()
             except Exception:
                 pass
-        calibration_tab = getattr(parent, "calibration_tab", None)
+        calibration_tab = getattr(host, "calibration_tab", None)
         if calibration_tab is not None and hasattr(calibration_tab, "_load_config_lists"):
             try:
                 calibration_tab._load_config_lists()

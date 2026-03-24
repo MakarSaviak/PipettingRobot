@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Callable
 from datetime import datetime
-from pathlib import Path
 import sys
 
 from PySide6.QtCore import Qt
@@ -30,6 +29,7 @@ from ..db import get_session
 from ..Solvent import Solvent
 from ..Syringe import Syringe
 from ..SyringeSolventLink import SyringeSolventLink
+from .assets import icon_path
 
 
 class DbTab(QWidget):
@@ -174,7 +174,7 @@ class DbTab(QWidget):
         self.tbl_links.verticalHeader().setVisible(False)
         self.tbl_links.verticalHeader().setDefaultSectionSize(32)
         if sys.platform.startswith("win"):
-            icon_path = (Path(__file__).resolve().parent / "check_white.svg").as_posix()
+            checkmark_icon = icon_path("check_white.svg").as_posix()
             self.tbl_links.setStyleSheet(
                 "QTableWidget::indicator {"
                 "  width: 16px; height: 16px;"
@@ -185,7 +185,7 @@ class DbTab(QWidget):
                 "QTableWidget::indicator:checked {"
                 "  background: #b28cff;"
                 "}"
-                f"QTableWidget::indicator:checked {{ image: url({icon_path}); }}"
+                f'QTableWidget::indicator:checked {{ image: url("{checkmark_icon}"); }}'
             )
         self.tbl_links.itemChanged.connect(self._on_link_table_changed)
         self.tbl_links.selectionModel().selectionChanged.connect(self._update_delete_button)

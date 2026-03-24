@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import sys
 
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QTabWidget
 
 from .db import create_db_and_tables
+from .gui.assets import icon_path
 from .gui.calibration_tab import CalibrationTab
 from .gui.config_tab import ConfigTab
 from .gui.db_tab import DbTab
@@ -17,6 +18,9 @@ class PipetGuiWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("PipetGui")
         self.resize(960, 640)
+        app_icon = icon_path("app.ico")
+        if app_icon.exists():
+            self.setWindowIcon(QIcon(str(app_icon)))
 
         self.tabs = QTabWidget(self)
         self.setCentralWidget(self.tabs)
@@ -153,6 +157,9 @@ class PipetGuiWindow(QMainWindow):
 def main() -> None:
     app = QApplication(sys.argv)
     app.setFont(QFont("Segoe UI", 10))
+    app_icon = icon_path("app.ico")
+    if app_icon.exists():
+        app.setWindowIcon(QIcon(str(app_icon)))
     w = PipetGuiWindow()
     w.show()
     sys.exit(app.exec())

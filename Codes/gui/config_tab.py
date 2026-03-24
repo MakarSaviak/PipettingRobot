@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -28,6 +27,7 @@ from ..config_io import delete_model, load_model, save_model
 from ..Machine import Machine
 from ..Rack import Rack
 from ..Syringe import Syringe
+from .gui_models import GuiSetupConfig
 
 
 class ConfigTab(QWidget):
@@ -106,6 +106,19 @@ class ConfigTab(QWidget):
             value = combo.itemData(row)
             view.setRowHidden(row, value in hidden_values)
 
+    def _update_gui_setup_machine_references(self, old_name: str, new_name: str) -> None:
+        for setup_cfg, path in GuiSetupConfig.load_all_from_dir(self._setups_dir):
+            if setup_cfg.machine != old_name:
+                continue
+            setup_cfg.with_machine_name(new_name).save_to_path(path)
+
+    def _update_gui_setup_rack_references(self, old_name: str, new_name: str) -> None:
+        for setup_cfg, path in GuiSetupConfig.load_all_from_dir(self._setups_dir):
+            rack_names = [new_name if rack_name == old_name else rack_name for rack_name in setup_cfg.racks]
+            if rack_names == setup_cfg.racks:
+                continue
+            setup_cfg.with_rack_names(rack_names).save_to_path(path)
+
     def _resolve_save_target_name(
         self,
         *,
@@ -115,34 +128,40 @@ class ConfigTab(QWidget):
         existing_names: set[str],
         entity_label: str,
         save_as: bool,
-    ) -> tuple[str, bool] | None:
+    ) -> tuple[str, str | None, bool] | None:
         if not entered_name:
             QMessageBox.warning(self, "Validation error", f"{entity_label} name is required.")
             return None
 
-        selected_name = None
+        selected_name: str | None = None
         if selected not in (None, self.NEW_ITEM):
             selected_name = str(selected)
 
-        if save_as:
+        if is_new_mode:
             target_name = entered_name
-            creating_new = is_new_mode or selected_name is None or target_name != selected_name
-        else:
-            if is_new_mode:
-                target_name = entered_name
-                creating_new = True
-            else:
-                if selected_name is None:
-                    QMessageBox.warning(
-                        self,
-                        "Validation error",
-                        f"Select a {entity_label.lower()} to edit or click Add.",
-                    )
-                    return None
-                target_name = selected_name
-                creating_new = False
+            if target_name in existing_names:
+                QMessageBox.warning(
+                    self,
+                    "Validation error",
+                    f"A {entity_label.lower()} named '{target_name}' already exists. "
+                    "Select it to edit or choose a new name.",
+                )
+                return None
+            return target_name, None, False
 
-        if creating_new and target_name in existing_names and target_name != selected_name:
+        if selected_name is None:
+            QMessageBox.warning(
+                self,
+                "Validation error",
+                f"Select a {entity_label.lower()} to edit or click Add.",
+            )
+            return None
+
+        target_name = entered_name
+        rename_existing = (not save_as) and target_name != selected_name
+        creating_new = save_as and target_name != selected_name
+
+        if (rename_existing or creating_new) and target_name in existing_names:
             QMessageBox.warning(
                 self,
                 "Validation error",
@@ -151,7 +170,7 @@ class ConfigTab(QWidget):
             )
             return None
 
-        return target_name, creating_new
+        return target_name, selected_name, rename_existing
 
     def _build_setup_tab(self) -> None:
         tab = QWidget()
@@ -535,8 +554,8 @@ class ConfigTab(QWidget):
         if self._setups_dir.exists():
             for path in sorted(self._setups_dir.glob("*.json")):
                 try:
-                    data = json.loads(path.read_text(encoding="utf-8"))
-                    name = str(data.get("name") or path.stem)
+                    setup_cfg = GuiSetupConfig.load_from_path(path)
+                    name = setup_cfg.name
                 except Exception:
                     name = path.stem
                 self._setup_paths[name] = path
@@ -601,14 +620,20 @@ class ConfigTab(QWidget):
             self._apply_setup_data(None, new_mode=False)
             return
         try:
-            data = json.loads(path.read_text(encoding="utf-8"))
+            setup_cfg = GuiSetupConfig.load_from_path(path)
         except Exception as e:
             QMessageBox.warning(self, "Load error", f"Could not read setup '{name}': {e!s}")
             self._apply_setup_data(None, new_mode=False)
             return
-        self._apply_setup_data(data, new_mode=False, selected_name=name)
+        self._apply_setup_data(setup_cfg, new_mode=False, selected_name=name)
 
-    def _apply_setup_data(self, data: dict | None, *, new_mode: bool, selected_name: str | None = None) -> None:
+    def _apply_setup_data(
+        self,
+        data: GuiSetupConfig | None,
+        *,
+        new_mode: bool,
+        selected_name: str | None = None,
+    ) -> None:
         self._loading_setup = True
         self.edt_setup_name.setReadOnly(False)
         if data is None:
@@ -619,34 +644,22 @@ class ConfigTab(QWidget):
             self._loading_setup = False
             return
 
-        name = selected_name or str(data.get("name") or "")
+        name = selected_name or data.name
         self.edt_setup_name.setText(name)
 
-        syringe_id = data.get("syringe_id")
-        if syringe_id is not None:
-            idx = self.cmb_setup_syringe.findData(int(syringe_id))
-            if idx >= 0:
-                self.cmb_setup_syringe.setCurrentIndex(idx)
-            else:
-                self.cmb_setup_syringe.setCurrentIndex(0)
+        idx = self.cmb_setup_syringe.findData(int(data.syringe_id))
+        if idx >= 0:
+            self.cmb_setup_syringe.setCurrentIndex(idx)
         else:
             self.cmb_setup_syringe.setCurrentIndex(0)
 
-        machine_name = data.get("machine")
-        if machine_name is not None:
-            idx = self.cmb_setup_machine.findData(str(machine_name))
-            if idx >= 0:
-                self.cmb_setup_machine.setCurrentIndex(idx)
-            else:
-                self.cmb_setup_machine.setCurrentIndex(0)
+        idx = self.cmb_setup_machine.findData(data.machine)
+        if idx >= 0:
+            self.cmb_setup_machine.setCurrentIndex(idx)
         else:
             self.cmb_setup_machine.setCurrentIndex(0)
 
-        racks = data.get("racks") or []
-        if isinstance(racks, list):
-            self._set_selected_racks_in_order([str(r) for r in racks])
-        else:
-            self._set_selected_racks_in_order([])
+        self._set_selected_racks_in_order(list(data.racks))
 
         self._loading_setup = False
 
@@ -809,7 +822,7 @@ class ConfigTab(QWidget):
         )
         if target is None:
             return
-        name, _ = target
+        name, selected_name, rename_existing = target
 
         syringe_id = self.cmb_setup_syringe.currentData()
         if syringe_id is None:
@@ -834,19 +847,29 @@ class ConfigTab(QWidget):
             )
             return
 
-        data = {
-            "name": name,
-            "syringe_id": int(syringe_id),
-            "machine": str(machine_name),
-            "racks": racks,
-        }
         try:
-            self._setups_dir.mkdir(parents=True, exist_ok=True)
-            path = self._setups_dir / f"{name}.json"
-            path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+            setup_cfg = GuiSetupConfig(
+                name=name,
+                syringe_id=int(syringe_id),
+                machine=str(machine_name),
+                racks=racks,
+            )
+            setup_cfg.save_to_dir(self._setups_dir)
         except Exception as e:
             QMessageBox.warning(self, "Save error", f"Could not save setup: {e!s}")
             return
+
+        if rename_existing and selected_name is not None:
+            old_path = self._setup_paths.get(selected_name, self._setups_dir / f"{selected_name}.json")
+            if old_path != self._setups_dir / f"{name}.json":
+                try:
+                    old_path.unlink()
+                except Exception as e:
+                    QMessageBox.warning(
+                        self,
+                        "Rename warning",
+                        f"Saved setup '{name}', but could not remove old setup '{selected_name}': {e!s}",
+                    )
 
         self._setup_is_new = False
         self._reload_setup_list()
@@ -854,6 +877,14 @@ class ConfigTab(QWidget):
         if idx >= 0:
             self.cmb_setup_select.setCurrentIndex(idx)
         self._notify_config_changed()
+
+    def _refresh_current_setup_form(self) -> None:
+        if self._setup_is_new:
+            return
+        selected = self.cmb_setup_select.currentData()
+        if selected in (None, self.NEW_ITEM):
+            return
+        self._on_setup_selected()
 
     def _rollback_setup(self) -> None:
         if self._setup_is_new:
@@ -972,7 +1003,7 @@ class ConfigTab(QWidget):
         )
         if target is None:
             return
-        name, _ = target
+        name, selected_name, rename_existing = target
 
         data = {
             "z_min_limit": float(self.spn_z_min_limit.value()),
@@ -1000,8 +1031,28 @@ class ConfigTab(QWidget):
             QMessageBox.warning(self, "Save error", f"Could not save machine: {e!s}")
             return
 
+        if rename_existing and selected_name is not None:
+            try:
+                self._update_gui_setup_machine_references(selected_name, name)
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Rename warning",
+                    f"Saved machine '{name}', but could not update all setup references: {e!s}",
+                )
+            try:
+                delete_model(Machine, selected_name)
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Rename warning",
+                    f"Saved machine '{name}', but could not remove old machine '{selected_name}': {e!s}",
+                )
+
         self._machine_is_new = False
         self._reload_machine_list()
+        self._reload_setup_list()
+        self._refresh_current_setup_form()
         idx = self.cmb_machine_select.findData(name)
         if idx >= 0:
             self.cmb_machine_select.setCurrentIndex(idx)
@@ -1151,7 +1202,7 @@ class ConfigTab(QWidget):
         )
         if target is None:
             return
-        name, _ = target
+        name, selected_name, rename_existing = target
 
         if self.spn_vial_rows.value() <= 0 or self.spn_vial_columns.value() <= 0:
             QMessageBox.warning(self, "Validation error", "Vial rows/columns must be > 0.")
@@ -1216,8 +1267,28 @@ class ConfigTab(QWidget):
             QMessageBox.warning(self, "Save error", f"Could not save rack: {e!s}")
             return
 
+        if rename_existing and selected_name is not None:
+            try:
+                self._update_gui_setup_rack_references(selected_name, name)
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Rename warning",
+                    f"Saved rack '{name}', but could not update all setup references: {e!s}",
+                )
+            try:
+                delete_model(Rack, selected_name)
+            except Exception as e:
+                QMessageBox.warning(
+                    self,
+                    "Rename warning",
+                    f"Saved rack '{name}', but could not remove old rack '{selected_name}': {e!s}",
+                )
+
         self._rack_is_new = False
         self._reload_rack_list()
+        self._reload_setup_list()
+        self._refresh_current_setup_form()
         idx = self.cmb_rack_select.findData(name)
         if idx >= 0:
             self.cmb_rack_select.setCurrentIndex(idx)

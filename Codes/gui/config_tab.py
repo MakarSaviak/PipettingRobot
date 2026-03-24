@@ -54,6 +54,9 @@ class ConfigTab(QWidget):
         self._loading_setup = False
         self._loading_machine = False
         self._loading_rack = False
+        self._setup_is_new = False
+        self._machine_is_new = False
+        self._rack_is_new = False
 
         self._build_ui()
         self._load_syringe_list()
@@ -92,6 +95,64 @@ class ConfigTab(QWidget):
         layout.addStretch(1)
         return row
 
+    def _prepare_selector_combo(self, combo: QComboBox) -> None:
+        combo.setEditable(False)
+
+    def _hide_combo_rows(self, combo: QComboBox, hidden_values: set[object]) -> None:
+        view = combo.view()
+        if view is None or not hasattr(view, "setRowHidden"):
+            return
+        for row in range(combo.count()):
+            value = combo.itemData(row)
+            view.setRowHidden(row, value in hidden_values)
+
+    def _resolve_save_target_name(
+        self,
+        *,
+        selected: object,
+        entered_name: str,
+        is_new_mode: bool,
+        existing_names: set[str],
+        entity_label: str,
+        save_as: bool,
+    ) -> tuple[str, bool] | None:
+        if not entered_name:
+            QMessageBox.warning(self, "Validation error", f"{entity_label} name is required.")
+            return None
+
+        selected_name = None
+        if selected not in (None, self.NEW_ITEM):
+            selected_name = str(selected)
+
+        if save_as:
+            target_name = entered_name
+            creating_new = is_new_mode or selected_name is None or target_name != selected_name
+        else:
+            if is_new_mode:
+                target_name = entered_name
+                creating_new = True
+            else:
+                if selected_name is None:
+                    QMessageBox.warning(
+                        self,
+                        "Validation error",
+                        f"Select a {entity_label.lower()} to edit or click Add.",
+                    )
+                    return None
+                target_name = selected_name
+                creating_new = False
+
+        if creating_new and target_name in existing_names and target_name != selected_name:
+            QMessageBox.warning(
+                self,
+                "Validation error",
+                f"A {entity_label.lower()} named '{target_name}' already exists. "
+                "Select it to edit or choose a new name.",
+            )
+            return None
+
+        return target_name, creating_new
+
     def _build_setup_tab(self) -> None:
         tab = QWidget()
         layout = QVBoxLayout(tab)
@@ -101,6 +162,7 @@ class ConfigTab(QWidget):
         select_row = QHBoxLayout()
         select_row.addWidget(QLabel("Setup"))
         self.cmb_setup_select = QComboBox()
+        self._prepare_selector_combo(self.cmb_setup_select)
         self.cmb_setup_select.currentIndexChanged.connect(self._on_setup_selected)
         select_row.addWidget(self.cmb_setup_select, 1)
         self.btn_setup_add = QPushButton("Add")
@@ -171,11 +233,14 @@ class ConfigTab(QWidget):
         buttons = QHBoxLayout()
         self.btn_setup_save = QPushButton("Save")
         self.btn_setup_save.clicked.connect(self._save_setup)
+        self.btn_setup_save_as = QPushButton("Save As")
+        self.btn_setup_save_as.clicked.connect(self._save_setup_as)
         self.btn_setup_rollback = QPushButton("Rollback")
         self.btn_setup_rollback.clicked.connect(self._rollback_setup)
         self.btn_setup_delete = QPushButton("Delete")
         self.btn_setup_delete.clicked.connect(self._delete_setup)
         buttons.addWidget(self.btn_setup_save)
+        buttons.addWidget(self.btn_setup_save_as)
         buttons.addWidget(self.btn_setup_rollback)
         buttons.addWidget(self.btn_setup_delete)
         buttons.addStretch(1)
@@ -192,6 +257,7 @@ class ConfigTab(QWidget):
         select_row = QHBoxLayout()
         select_row.addWidget(QLabel("Machine"))
         self.cmb_machine_select = QComboBox()
+        self._prepare_selector_combo(self.cmb_machine_select)
         self.cmb_machine_select.currentIndexChanged.connect(self._on_machine_selected)
         select_row.addWidget(self.cmb_machine_select, 1)
         self.btn_machine_add = QPushButton("Add")
@@ -245,11 +311,14 @@ class ConfigTab(QWidget):
         buttons = QHBoxLayout()
         self.btn_machine_save = QPushButton("Save")
         self.btn_machine_save.clicked.connect(self._save_machine)
+        self.btn_machine_save_as = QPushButton("Save As")
+        self.btn_machine_save_as.clicked.connect(self._save_machine_as)
         self.btn_machine_rollback = QPushButton("Rollback")
         self.btn_machine_rollback.clicked.connect(self._rollback_machine)
         self.btn_machine_delete = QPushButton("Delete")
         self.btn_machine_delete.clicked.connect(self._delete_machine)
         buttons.addWidget(self.btn_machine_save)
+        buttons.addWidget(self.btn_machine_save_as)
         buttons.addWidget(self.btn_machine_rollback)
         buttons.addWidget(self.btn_machine_delete)
         buttons.addStretch(1)
@@ -266,6 +335,7 @@ class ConfigTab(QWidget):
         select_row = QHBoxLayout()
         select_row.addWidget(QLabel("Rack"))
         self.cmb_rack_select = QComboBox()
+        self._prepare_selector_combo(self.cmb_rack_select)
         self.cmb_rack_select.currentIndexChanged.connect(self._on_rack_selected)
         select_row.addWidget(self.cmb_rack_select, 1)
         self.btn_rack_add = QPushButton("Add")
@@ -354,11 +424,14 @@ class ConfigTab(QWidget):
         buttons = QHBoxLayout()
         self.btn_rack_save = QPushButton("Save")
         self.btn_rack_save.clicked.connect(self._save_rack)
+        self.btn_rack_save_as = QPushButton("Save As")
+        self.btn_rack_save_as.clicked.connect(self._save_rack_as)
         self.btn_rack_rollback = QPushButton("Rollback")
         self.btn_rack_rollback.clicked.connect(self._rollback_rack)
         self.btn_rack_delete = QPushButton("Delete")
         self.btn_rack_delete.clicked.connect(self._delete_rack)
         buttons.addWidget(self.btn_rack_save)
+        buttons.addWidget(self.btn_rack_save_as)
         buttons.addWidget(self.btn_rack_rollback)
         buttons.addWidget(self.btn_rack_delete)
         buttons.addStretch(1)
@@ -415,7 +488,7 @@ class ConfigTab(QWidget):
         *,
         include_select: bool = True,
         include_new: bool = False,
-        current_data: str | None = None,
+        current_data: object | None = None,
     ) -> None:
         combo.blockSignals(True)
         combo.clear()
@@ -425,11 +498,13 @@ class ConfigTab(QWidget):
             combo.addItem(item, item)
         if include_new:
             combo.addItem("new", self.NEW_ITEM)
-        if current_data is not None:
-            idx = combo.findData(current_data)
-            if idx >= 0:
-                combo.setCurrentIndex(idx)
+        idx = combo.findData(current_data) if current_data is not None else -1
+        if idx < 0:
+            idx = 0 if include_select and combo.count() > 0 else -1
+        combo.setCurrentIndex(idx)
         combo.blockSignals(False)
+        if include_new:
+            self._hide_combo_rows(combo, {self.NEW_ITEM})
 
     # ---------------- Data loading ----------------
 
@@ -483,9 +558,7 @@ class ConfigTab(QWidget):
         self._populate_combo(self.cmb_machine_select, names, include_new=True, current_data=current)
 
         current_machine = self.cmb_setup_machine.currentData() if hasattr(self, "cmb_setup_machine") else None
-        self._populate_combo(
-            self.cmb_setup_machine, names, include_new=False, include_select=True, current_data=current_machine
-        )
+        self._populate_combo(self.cmb_setup_machine, names, include_select=True, current_data=current_machine)
 
         if not names:
             self._start_new_machine()
@@ -513,8 +586,10 @@ class ConfigTab(QWidget):
             return
         selected = self.cmb_setup_select.currentData()
         if selected == self.NEW_ITEM:
+            self._setup_is_new = True
             self._apply_setup_data(None, new_mode=True)
             return
+        self._setup_is_new = False
         if selected is None:
             self._apply_setup_data(None, new_mode=False)
             return
@@ -535,7 +610,7 @@ class ConfigTab(QWidget):
 
     def _apply_setup_data(self, data: dict | None, *, new_mode: bool, selected_name: str | None = None) -> None:
         self._loading_setup = True
-        self.edt_setup_name.setReadOnly(not new_mode)
+        self.edt_setup_name.setReadOnly(False)
         if data is None:
             self.edt_setup_name.setText("")
             self.cmb_setup_syringe.setCurrentIndex(0)
@@ -576,6 +651,7 @@ class ConfigTab(QWidget):
         self._loading_setup = False
 
     def _start_new_setup(self) -> None:
+        self._setup_is_new = True
         idx = self.cmb_setup_select.findData(self.NEW_ITEM)
         if idx >= 0:
             self.cmb_setup_select.setCurrentIndex(idx)
@@ -716,22 +792,24 @@ class ConfigTab(QWidget):
         self.lbl_setup_summary.setText(msg)
 
     def _save_setup(self) -> None:
-        selected = self.cmb_setup_select.currentData()
-        is_new = selected == self.NEW_ITEM or selected is None
+        self._save_setup_impl(save_as=False)
 
-        name = self.edt_setup_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Validation error", "Setup name is required.")
+    def _save_setup_as(self) -> None:
+        self._save_setup_impl(save_as=True)
+
+    def _save_setup_impl(self, *, save_as: bool) -> None:
+        selected = self.cmb_setup_select.currentData()
+        target = self._resolve_save_target_name(
+            selected=selected,
+            entered_name=self.edt_setup_name.text().strip(),
+            is_new_mode=self._setup_is_new,
+            existing_names=set(self._setup_paths),
+            entity_label="Setup",
+            save_as=save_as,
+        )
+        if target is None:
             return
-        if is_new and name in self._setup_paths:
-            QMessageBox.warning(
-                self,
-                "Validation error",
-                f"A setup named '{name}' already exists. Select it to edit or choose a new name.",
-            )
-            return
-        if not is_new:
-            name = str(selected)
+        name, _ = target
 
         syringe_id = self.cmb_setup_syringe.currentData()
         if syringe_id is None:
@@ -770,6 +848,7 @@ class ConfigTab(QWidget):
             QMessageBox.warning(self, "Save error", f"Could not save setup: {e!s}")
             return
 
+        self._setup_is_new = False
         self._reload_setup_list()
         idx = self.cmb_setup_select.findData(name)
         if idx >= 0:
@@ -777,10 +856,10 @@ class ConfigTab(QWidget):
         self._notify_config_changed()
 
     def _rollback_setup(self) -> None:
-        selected = self.cmb_setup_select.currentData()
-        if selected == self.NEW_ITEM:
-            self._apply_setup_data(None, new_mode=True)
+        if self._setup_is_new:
+            self._start_new_setup()
             return
+        selected = self.cmb_setup_select.currentData()
         if selected is None:
             self._apply_setup_data(None, new_mode=False)
             return
@@ -788,7 +867,7 @@ class ConfigTab(QWidget):
 
     def _delete_setup(self) -> None:
         selected = self.cmb_setup_select.currentData()
-        if selected is None or selected == self.NEW_ITEM:
+        if selected is None or self._setup_is_new:
             QMessageBox.warning(self, "Delete error", "Select a setup to delete.")
             return
         name = str(selected)
@@ -814,8 +893,10 @@ class ConfigTab(QWidget):
             return
         selected = self.cmb_machine_select.currentData()
         if selected == self.NEW_ITEM:
+            self._machine_is_new = True
             self._apply_machine_data(None, new_mode=True)
             return
+        self._machine_is_new = False
         if selected is None:
             self._apply_machine_data(None, new_mode=False)
             return
@@ -831,7 +912,7 @@ class ConfigTab(QWidget):
 
     def _apply_machine_data(self, machine: Machine | None, *, new_mode: bool, selected_name: str | None = None) -> None:
         self._loading_machine = True
-        self.edt_machine_name.setReadOnly(not new_mode)
+        self.edt_machine_name.setReadOnly(False)
         if machine is None:
             self.edt_machine_name.setText("")
             for spin in (
@@ -866,6 +947,7 @@ class ConfigTab(QWidget):
         self._loading_machine = False
 
     def _start_new_machine(self) -> None:
+        self._machine_is_new = True
         idx = self.cmb_machine_select.findData(self.NEW_ITEM)
         if idx >= 0:
             self.cmb_machine_select.setCurrentIndex(idx)
@@ -873,22 +955,24 @@ class ConfigTab(QWidget):
             self._apply_machine_data(None, new_mode=True)
 
     def _save_machine(self) -> None:
-        selected = self.cmb_machine_select.currentData()
-        is_new = selected == self.NEW_ITEM or selected is None
+        self._save_machine_impl(save_as=False)
 
-        name = self.edt_machine_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Validation error", "Machine name is required.")
+    def _save_machine_as(self) -> None:
+        self._save_machine_impl(save_as=True)
+
+    def _save_machine_impl(self, *, save_as: bool) -> None:
+        selected = self.cmb_machine_select.currentData()
+        target = self._resolve_save_target_name(
+            selected=selected,
+            entered_name=self.edt_machine_name.text().strip(),
+            is_new_mode=self._machine_is_new,
+            existing_names=set(self._machine_paths),
+            entity_label="Machine",
+            save_as=save_as,
+        )
+        if target is None:
             return
-        if is_new and name in self._machine_paths:
-            QMessageBox.warning(
-                self,
-                "Validation error",
-                f"A machine named '{name}' already exists. Select it to edit or choose a new name.",
-            )
-            return
-        if not is_new:
-            name = str(selected)
+        name, _ = target
 
         data = {
             "z_min_limit": float(self.spn_z_min_limit.value()),
@@ -916,6 +1000,7 @@ class ConfigTab(QWidget):
             QMessageBox.warning(self, "Save error", f"Could not save machine: {e!s}")
             return
 
+        self._machine_is_new = False
         self._reload_machine_list()
         idx = self.cmb_machine_select.findData(name)
         if idx >= 0:
@@ -923,10 +1008,10 @@ class ConfigTab(QWidget):
         self._notify_config_changed()
 
     def _rollback_machine(self) -> None:
-        selected = self.cmb_machine_select.currentData()
-        if selected == self.NEW_ITEM:
-            self._apply_machine_data(None, new_mode=True)
+        if self._machine_is_new:
+            self._start_new_machine()
             return
+        selected = self.cmb_machine_select.currentData()
         if selected is None:
             self._apply_machine_data(None, new_mode=False)
             return
@@ -934,7 +1019,7 @@ class ConfigTab(QWidget):
 
     def _delete_machine(self) -> None:
         selected = self.cmb_machine_select.currentData()
-        if selected is None or selected == self.NEW_ITEM:
+        if selected is None or self._machine_is_new:
             QMessageBox.warning(self, "Delete error", "Select a machine to delete.")
             return
         name = str(selected)
@@ -956,8 +1041,10 @@ class ConfigTab(QWidget):
             return
         selected = self.cmb_rack_select.currentData()
         if selected == self.NEW_ITEM:
+            self._rack_is_new = True
             self._apply_rack_data(None, new_mode=True)
             return
+        self._rack_is_new = False
         if selected is None:
             self._apply_rack_data(None, new_mode=False)
             return
@@ -973,7 +1060,7 @@ class ConfigTab(QWidget):
 
     def _apply_rack_data(self, rack: Rack | None, *, new_mode: bool, selected_name: str | None = None) -> None:
         self._loading_rack = True
-        self.edt_rack_name.setReadOnly(not new_mode)
+        self.edt_rack_name.setReadOnly(False)
         if rack is None:
             self.edt_rack_name.setText("")
             for spin in (
@@ -1022,6 +1109,7 @@ class ConfigTab(QWidget):
         self._loading_rack = False
 
     def _start_new_rack(self) -> None:
+        self._rack_is_new = True
         idx = self.cmb_rack_select.findData(self.NEW_ITEM)
         if idx >= 0:
             self.cmb_rack_select.setCurrentIndex(idx)
@@ -1046,22 +1134,24 @@ class ConfigTab(QWidget):
         return value
 
     def _save_rack(self) -> None:
-        selected = self.cmb_rack_select.currentData()
-        is_new = selected == self.NEW_ITEM or selected is None
+        self._save_rack_impl(save_as=False)
 
-        name = self.edt_rack_name.text().strip()
-        if not name:
-            QMessageBox.warning(self, "Validation error", "Rack name is required.")
+    def _save_rack_as(self) -> None:
+        self._save_rack_impl(save_as=True)
+
+    def _save_rack_impl(self, *, save_as: bool) -> None:
+        selected = self.cmb_rack_select.currentData()
+        target = self._resolve_save_target_name(
+            selected=selected,
+            entered_name=self.edt_rack_name.text().strip(),
+            is_new_mode=self._rack_is_new,
+            existing_names=set(self._rack_paths),
+            entity_label="Rack",
+            save_as=save_as,
+        )
+        if target is None:
             return
-        if is_new and name in self._rack_paths:
-            QMessageBox.warning(
-                self,
-                "Validation error",
-                f"A rack named '{name}' already exists. Select it to edit or choose a new name.",
-            )
-            return
-        if not is_new:
-            name = str(selected)
+        name, _ = target
 
         if self.spn_vial_rows.value() <= 0 or self.spn_vial_columns.value() <= 0:
             QMessageBox.warning(self, "Validation error", "Vial rows/columns must be > 0.")
@@ -1126,6 +1216,7 @@ class ConfigTab(QWidget):
             QMessageBox.warning(self, "Save error", f"Could not save rack: {e!s}")
             return
 
+        self._rack_is_new = False
         self._reload_rack_list()
         idx = self.cmb_rack_select.findData(name)
         if idx >= 0:
@@ -1133,10 +1224,10 @@ class ConfigTab(QWidget):
         self._notify_config_changed()
 
     def _rollback_rack(self) -> None:
-        selected = self.cmb_rack_select.currentData()
-        if selected == self.NEW_ITEM:
-            self._apply_rack_data(None, new_mode=True)
+        if self._rack_is_new:
+            self._start_new_rack()
             return
+        selected = self.cmb_rack_select.currentData()
         if selected is None:
             self._apply_rack_data(None, new_mode=False)
             return
@@ -1144,7 +1235,7 @@ class ConfigTab(QWidget):
 
     def _delete_rack(self) -> None:
         selected = self.cmb_rack_select.currentData()
-        if selected is None or selected == self.NEW_ITEM:
+        if selected is None or self._rack_is_new:
             QMessageBox.warning(self, "Delete error", "Select a rack to delete.")
             return
         name = str(selected)

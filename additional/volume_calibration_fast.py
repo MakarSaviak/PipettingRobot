@@ -35,7 +35,6 @@ vials_per_row = config.getint('Rack', 'vials_per_row')
 columns = config.getint('Rack', 'columns')
 syringe_vol = config.getint(syringe_name, 'max_volume')
 # Machine Settings
-Z_slow = config.getint('Machine', 'Z_slow')
 Z_max = config.getint('Machine', 'Z_max')
 Z_min = config.getint('Machine', 'Z_min')
 Fz = config.getint('Machine', 'Fz')
@@ -73,11 +72,8 @@ def fill_vial(x, y, non_contact=False):
     g.absolute()
     g.move(z=Z_max, F=Fz)
     g.move(x, y, F=Fxy)
-    if non_contact:
-        g.move(z=Z_slow, F=Fz)
-    else:
-        g.move(z=Z_min, F=Fz)
-    g.move(A=0, F=Fa_push)
+    g.move(z=Z_min, F=Fz)
+    g.move(A=0, F=Fa_push_slow if non_contact else Fa_push)
     g.absolute()
     g.move(z=Z_max, F=Fz)
 #Function to perform the remove from vial operation

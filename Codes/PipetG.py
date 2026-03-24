@@ -33,7 +33,6 @@ class PipetG(BaseModel):
     z_min_vials: list[float] | None = Field(default=None, exclude=True, repr=False)
     z_min: float | None = Field(default=None, exclude=True, repr=False)
     z_max: float | None = Field(default=None, exclude=True, repr=False)
-    z_slow: float | None = Field(default=None, exclude=True, repr=False)
     Fz: float | None = Field(default=None, exclude=True, repr=False)
     Fxy: float | None = Field(default=None, exclude=True, repr=False)
     Fa_push: float | None = Field(default=None, exclude=True, repr=False)
@@ -84,7 +83,6 @@ class PipetG(BaseModel):
                 or self.z_min_vials is None
                 or self.z_min is None
                 or self.z_max is None
-                or self.z_slow is None
                 or self.Fz is None
                 or self.Fxy is None
                 or self.Fa_push is None
@@ -125,7 +123,6 @@ class PipetG(BaseModel):
         # machine
         self.z_min = machine.z_min
         self.z_max = machine.z_max
-        self.z_slow = machine.z_slow
         self.Fz = machine.Fz
         self.Fxy = machine.Fxy
         self.Fa_push = machine.Fa_push
@@ -172,10 +169,7 @@ class PipetG(BaseModel):
         g.absolute()
         g.move(z=self.z_max, F=self.Fz)
         g.move(**attr)
-        if slow:
-            g.move(z=self.z_slow, F=self.Fz)
-        else:
-            g.move(z=self.z_min if z_min is None else z_min, F=self.Fz)
+        g.move(z=self.z_min if z_min is None else z_min, F=self.Fz)
 
     # ----------- main funcs -----------
     def home(self) -> None:

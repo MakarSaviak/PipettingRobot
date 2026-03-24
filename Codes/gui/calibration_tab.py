@@ -271,16 +271,15 @@ class CalibrationTab(QWidget):
 
         self.chk_vials_flush = QCheckBox("Initial flush (3×)")
         self.chk_vials_flush.setChecked(True)
-        self.chk_vials_non_contact = QCheckBox()
-        self.chk_vials_non_contact.setChecked(True)
-        lbl_non_contact = QLabel("Non-contact dispense (use Z<sub>slow</sub>)")
-        lbl_non_contact.setTextFormat(Qt.RichText)
+        self.chk_vials_slow = QCheckBox()
+        self.chk_vials_slow.setChecked(True)
+        lbl_slow = QLabel("Slow dispense")
 
         opts = QHBoxLayout()
         opts.addWidget(self.chk_vials_flush)
         opts.addSpacing(24)
-        opts.addWidget(self.chk_vials_non_contact)
-        opts.addWidget(lbl_non_contact)
+        opts.addWidget(self.chk_vials_slow)
+        opts.addWidget(lbl_slow)
         opts.addStretch(1)
         self.btn_vials_generate = QPushButton("Generate calibration G-code")
         self.btn_vials_generate.clicked.connect(self._on_generate_vials)
@@ -871,7 +870,7 @@ class CalibrationTab(QWidget):
         try:
             rack_name = self._selected_rack_name(self.cmb_rack, require=True)
             initial_flush = self.chk_vials_flush.isChecked()
-            non_contact = self.chk_vials_non_contact.isChecked()
+            slow_dispense = self.chk_vials_slow.isChecked()
             datapoints = int(self.spn_fast_datapoints.value())
             repeats = int(self.spn_fast_repeats.value())
             start_ul = float(self.spn_fast_start.value())
@@ -920,7 +919,7 @@ class CalibrationTab(QWidget):
 
                         x, y = vial_positions[current_vial]
                         z_min = z_min_vials[current_vial]
-                        pg.fill_vial(x, y, slow=non_contact, z_min=z_min)
+                        pg.fill_vial(x, y, slow=slow_dispense, z_min=z_min)
                         current_vial += 1
 
                 pg.finish()

@@ -211,7 +211,6 @@ class ConfigTab(QWidget):
         self.spn_z_max_limit = self._float_box(minimum=-1e6, maximum=1e6)
         self.spn_z_min = self._float_box(minimum=-1e6, maximum=1e6)
         self.spn_z_max = self._float_box(minimum=-1e6, maximum=1e6)
-        self.spn_z_slow = self._float_box(minimum=-1e6, maximum=1e6)
 
         self.spn_fz = self._float_box(minimum=0.0, maximum=1e6, decimals=3)
         self.spn_fxy = self._float_box(minimum=0.0, maximum=1e6, decimals=3)
@@ -230,7 +229,6 @@ class ConfigTab(QWidget):
                 ("z_max_limit", self.spn_z_max_limit),
             )
         )
-        card_layout.addWidget(self._row_fields(("z_slow", self.spn_z_slow)))
         card_layout.addWidget(
             self._row_fields(
                 ("Fz", self.spn_fz),
@@ -841,7 +839,6 @@ class ConfigTab(QWidget):
                 self.spn_z_max_limit,
                 self.spn_z_min,
                 self.spn_z_max,
-                self.spn_z_slow,
                 self.spn_fz,
                 self.spn_fxy,
                 self.spn_fa_push,
@@ -859,7 +856,6 @@ class ConfigTab(QWidget):
         self.spn_z_max_limit.setValue(float(machine.z_max_limit))
         self.spn_z_min.setValue(float(machine.z_min))
         self.spn_z_max.setValue(float(machine.z_max))
-        self.spn_z_slow.setValue(float(machine.z_slow))
         self.spn_fz.setValue(float(machine.Fz))
         self.spn_fxy.setValue(float(machine.Fxy))
         self.spn_fa_push.setValue(float(machine.Fa_push))
@@ -899,7 +895,6 @@ class ConfigTab(QWidget):
             "z_max_limit": float(self.spn_z_max_limit.value()),
             "z_min": float(self.spn_z_min.value()),
             "z_max": float(self.spn_z_max.value()),
-            "z_slow": float(self.spn_z_slow.value()),
             "Fz": float(self.spn_fz.value()),
             "Fxy": float(self.spn_fxy.value()),
             "Fa_push": float(self.spn_fa_push.value()),

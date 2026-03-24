@@ -7,7 +7,6 @@ class Machine(BaseModel):
 
     z_min: float # 25
     z_max: float # 75
-    z_slow: float # 35
     Fz: PositiveFloat
     Fxy: PositiveFloat
     Fa_push: PositiveFloat
@@ -29,6 +28,4 @@ class Machine(BaseModel):
             raise ValueError(
                 f"Z bounds invalid: require {self.z_min_limit} <= Z_min <= Z_max <= {self.z_max_limit}"
             )
-        if not (self.z_min <= self.z_slow <= self.z_max):
-            raise ValueError("Z_slow must be between Z_min and Z_max")
         return self

@@ -67,7 +67,6 @@ class VolumeCalibrationWindow(QMainWindow):
 
         # Machine settings
         try:
-            self.Z_slow = self.config.getfloat("Machine", "Z_slow")
             self.Z_min = self.config.getfloat("Machine", "Z_min")
             self.Z_max = self.config.getfloat("Machine", "Z_max")
             self.Fz = self.config.getfloat("Machine", "Fz")
@@ -135,12 +134,12 @@ class VolumeCalibrationWindow(QMainWindow):
         # Options
         self.chk_initial_flush = QCheckBox("Initial Flush")
         self.chk_leading_air = QCheckBox("Leading Air Gap")
-        self.chk_non_contact = QCheckBox("Non-Contact dispense (use Z_slow)")
+        self.chk_slow_dispense = QCheckBox("Slow dispense")
 
         opts = QHBoxLayout()
         opts.addWidget(self.chk_initial_flush)
         opts.addWidget(self.chk_leading_air)
-        opts.addWidget(self.chk_non_contact)
+        opts.addWidget(self.chk_slow_dispense)
         opts.addStretch(1)
         root.addLayout(opts)
 
@@ -198,16 +197,13 @@ class VolumeCalibrationWindow(QMainWindow):
             self.g.move(A=0, F=self.Fa_push)
             self.g.move(z=self.Z_min, F=self.Fz)
 
-    def fill_vial(self, x: float, y: float, non_contact: bool):
+    def fill_vial(self, x: float, y: float, slow_dispense: bool):
         self.g.write("fill_vial")
         self.g.absolute()
         self.g.move(z=self.Z_min, F=self.Fz)
         self.g.move(x=x, y=y, F=self.Fxy)
-        if non_contact:
-            self.g.move(z=self.Z_slow, F=self.Fz)
-        else:
-            self.g.move(z=self.Z_max, F=self.Fz)
-        self.g.move(A=0, F=self.Fa_push)
+        self.g.move(z=self.Z_max, F=self.Fz)
+        self.g.move(A=0, F=self.Fa_push_slow if slow_dispense else self.Fa_push)
         self.g.absolute()
         self.g.move(z=self.Z_min, F=self.Fz)
 
@@ -236,7 +232,7 @@ class VolumeCalibrationWindow(QMainWindow):
             n100 = int(self.spn_100.value())
             initial_flush = self.chk_initial_flush.isChecked()
             leading_air_gap = self.chk_leading_air.isChecked()
-            non_contact = self.chk_non_contact.isChecked()
+            slow_dispense = self.chk_slow_dispense.isChecked()
         except Exception as e:
             QMessageBox.critical(self, "Input Error", str(e))
             return
@@ -278,7 +274,7 @@ class VolumeCalibrationWindow(QMainWindow):
 
                     # Dispense into next vial
                     x, y = self.vial_s(current_vial)
-                    self.fill_vial(x, y, non_contact=non_contact)
+                    self.fill_vial(x, y, slow_dispense=slow_dispense)
                     current_vial += 1
 
             self.home()

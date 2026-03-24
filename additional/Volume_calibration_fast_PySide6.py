@@ -47,7 +47,6 @@ class FastCalibrationWindow(QMainWindow):
 
         # Machine settings
         try:
-            self.Z_slow = self.config.getint("Machine", "Z_slow")
             self.Z_max  = self.config.getint("Machine", "Z_max")
             self.Z_min  = self.config.getint("Machine", "Z_min")
             self.Fz     = self.config.getint("Machine", "Fz")
@@ -143,13 +142,13 @@ class FastCalibrationWindow(QMainWindow):
             self.g.move(A=0, F=self.Fa_push)
             self.g.move(z=self.Z_max, F=self.Fz)
 
-    def fill_vial(self, x: float, y: float, non_contact: bool = False):
+    def fill_vial(self, x: float, y: float, slow_dispense: bool = False):
         self.g.write("fill_vial")
         self.g.absolute()
         self.g.move(z=self.Z_max, F=self.Fz)
         self.g.move(x=x, y=y, F=self.Fxy)
-        self.g.move(z=(self.Z_slow if non_contact else self.Z_min), F=self.Fz)
-        self.g.move(A=0, F=self.Fa_push)
+        self.g.move(z=self.Z_min, F=self.Fz)
+        self.g.move(A=0, F=self.Fa_push_slow if slow_dispense else self.Fa_push)
         self.g.absolute()
         self.g.move(z=self.Z_max, F=self.Fz)
 

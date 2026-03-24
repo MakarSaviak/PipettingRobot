@@ -174,7 +174,7 @@ class DbTab(QWidget):
         self.tbl_links.verticalHeader().setVisible(False)
         self.tbl_links.verticalHeader().setDefaultSectionSize(32)
         if sys.platform.startswith("win"):
-            checkmark_icon = icon_path("check_white.svg").as_posix()
+            checkmark_icon = icon_path("checkmark.svg").as_posix()
             self.tbl_links.setStyleSheet(
                 "QTableWidget::indicator {"
                 "  width: 16px; height: 16px;"

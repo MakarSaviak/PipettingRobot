@@ -33,10 +33,17 @@ from .assets import icon_path
 
 
 class DbTab(QWidget):
-    def __init__(self, parent: QWidget | None = None, *, on_syringe_changed: Callable[[], None] | None = None):
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        on_syringe_changed: Callable[[], None] | None = None,
+        on_calibration_changed: Callable[[], None] | None = None,
+    ):
         super().__init__(parent)
 
         self._on_syringe_changed = on_syringe_changed
+        self._on_calibration_changed = on_calibration_changed
         self._loading_syringes = False
         self._loading_solvents = False
         self._loading_links = False
@@ -684,16 +691,21 @@ class DbTab(QWidget):
         return True
 
     def _save_all(self) -> None:
+        save_syr = self._syringe_dirty
+        save_sol = self._solvent_dirty
+        save_link = self._link_dirty
         ok_syr = True
         ok_sol = True
         ok_link = True
-        if self._syringe_dirty:
+        if save_syr:
             ok_syr = self._save_syringe_table()
-        if self._solvent_dirty:
+        if save_sol:
             ok_sol = self._save_solvent_table()
-        if self._link_dirty:
+        if save_link:
             ok_link = self._save_link_table()
         if ok_syr and ok_sol and ok_link:
+            if (save_sol or save_link) and self._on_calibration_changed is not None:
+                self._on_calibration_changed()
             self._update_save_button()
 
 

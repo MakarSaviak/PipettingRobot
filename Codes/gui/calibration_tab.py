@@ -130,6 +130,9 @@ class CalibrationTab(QWidget):
         self.spn_solvent_id.valueChanged.connect(self._update_generate_enabled)
         self.spn_solvent_id.valueChanged.connect(self._update_calibration_factors)
         syringe_row.addWidget(self.spn_solvent_id)
+        self.lbl_solvent_name = QLabel("Solvent: —")
+        syringe_row.addSpacing(8)
+        syringe_row.addWidget(self.lbl_solvent_name)
         syringe_row.addSpacing(12)
         self.lbl_cf_current = QLabel()
         self.lbl_cf_current.setTextFormat(Qt.RichText)
@@ -641,6 +644,10 @@ class CalibrationTab(QWidget):
     def refresh_syringe_list(self) -> None:
         self._load_syringe_list()
 
+    def refresh_calibration_state(self) -> None:
+        self._update_generate_enabled()
+        self._update_calibration_factors()
+
     def set_selected_syringe_id(self, syringe_id: int | None) -> None:
         if syringe_id is None:
             return
@@ -736,12 +743,34 @@ class CalibrationTab(QWidget):
         self.lbl_cf_current.setText(f"CF<sub>current</sub> = {cf_text}")
         self.lbl_bc_current.setText(f"BC<sub>current</sub> = {bc_text}")
 
+    def _set_solvent_label(self, solvent: Solvent | None, solvent_id: int | None) -> None:
+        if solvent is not None:
+            self.lbl_solvent_name.setText(f"Solvent: {solvent.name}")
+            return
+        if solvent_id is None:
+            self.lbl_solvent_name.setText("Solvent: —")
+            return
+        self.lbl_solvent_name.setText("Solvent: not found")
+
     def _update_calibration_factors(self) -> None:
         s_id = self.cmb_syringe.currentData()
+
+        solvent_id = self._current_solvent_id()
+        solvent = None
+        self._current_density = None
+        if solvent_id is not None:
+            try:
+                solvent = Solvent.get_by_id(int(solvent_id))
+                if solvent is not None and solvent.density_g_per_ml is not None:
+                    self._current_density = float(solvent.density_g_per_ml)
+            except Exception:
+                solvent = None
+                self._current_density = None
+        self._set_solvent_label(solvent, solvent_id)
+
         if s_id is None:
             self._current_cf = None
             self._current_bc = None
-            self._current_density = None
             self._set_cf_bc_labels(None, None)
             self._refresh_eval_placeholders()
             return
@@ -750,16 +779,6 @@ class CalibrationTab(QWidget):
             syringe = Syringe.get_by_id(int(s_id))
         except Exception:
             syringe = None
-
-        solvent_id = self._current_solvent_id()
-        self._current_density = None
-        if solvent_id is not None:
-            try:
-                solvent = Solvent.get_by_id(int(solvent_id))
-                if solvent is not None and solvent.density_g_per_ml is not None:
-                    self._current_density = float(solvent.density_g_per_ml)
-            except Exception:
-                self._current_density = None
 
         link = None
         if solvent_id is not None:

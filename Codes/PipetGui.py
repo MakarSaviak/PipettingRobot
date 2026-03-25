@@ -44,6 +44,7 @@ class PipetGuiWindow(QMainWindow):
                 self.gcode_tab.refresh_syringe_list(),
                 self.calibration_tab.refresh_syringe_list(),
             ),
+            on_calibration_changed=self.calibration_tab.refresh_calibration_state,
         )
 
         self.tabs.addTab(self.gcode_tab, "G-code")

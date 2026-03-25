@@ -1,0 +1,9 @@
+{
+  "name": "TLC",
+  "syringe_id": 1,
+  "machine": "TLC",
+  "racks": [
+    "TLC",
+    "GC-10-3_3-1"
+  ]
+}

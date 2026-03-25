@@ -42,6 +42,7 @@ class PipetGuiWindow(QMainWindow):
             self,
             on_syringe_changed=lambda: (
                 self.gcode_tab.refresh_syringe_list(),
+                self.config_tab.refresh_syringe_list(),
                 self.calibration_tab.refresh_syringe_list(),
             ),
             on_calibration_changed=self.calibration_tab.refresh_calibration_state,

@@ -4,7 +4,7 @@ from typing import Callable
 from datetime import datetime
 import sys
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -91,10 +91,14 @@ class DbTab(QWidget):
         self.tbl_syringes.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tbl_syringes.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.tbl_syringes.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.tbl_syringes.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.tbl_syringes.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.tbl_syringes.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.tbl_syringes.horizontalHeader().setSectionResizeMode(1, QHeaderView.Interactive)
+        self.tbl_syringes.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.tbl_syringes.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
+        self.tbl_syringes.setColumnWidth(1, 150)
+        self.tbl_syringes.setColumnWidth(3, 160)
         self.tbl_syringes.verticalHeader().setVisible(False)
+        self.tbl_syringes.verticalHeader().setDefaultSectionSize(32)
+        self.tbl_syringes.setItemDelegate(_CompactLineEditDelegate(self.tbl_syringes))
         self.tbl_syringes.itemChanged.connect(self._on_syringe_table_changed)
         self.tbl_syringes.selectionModel().selectionChanged.connect(self._update_delete_button)
         syr_col.addWidget(self.tbl_syringes, 1)
@@ -129,6 +133,8 @@ class DbTab(QWidget):
         self.tbl_solvents.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.tbl_solvents.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.tbl_solvents.verticalHeader().setVisible(False)
+        self.tbl_solvents.verticalHeader().setDefaultSectionSize(32)
+        self.tbl_solvents.setItemDelegate(_CompactLineEditDelegate(self.tbl_solvents))
         self.tbl_solvents.itemChanged.connect(self._on_solvent_table_changed)
         self.tbl_solvents.selectionModel().selectionChanged.connect(self._update_delete_button)
         solv_col.addWidget(self.tbl_solvents, 1)
@@ -196,6 +202,9 @@ class DbTab(QWidget):
             )
         self.tbl_links.itemChanged.connect(self._on_link_table_changed)
         self.tbl_links.selectionModel().selectionChanged.connect(self._update_delete_button)
+        compact_delegate = _CompactLineEditDelegate(self.tbl_links)
+        for col in (0, 1, 3, 4):
+            self.tbl_links.setItemDelegateForColumn(col, compact_delegate)
         self.tbl_links.setItemDelegateForColumn(5, _SincePlaceholderDelegate(self.tbl_links))
         root.addWidget(self.tbl_links, 1)
 
@@ -709,9 +718,36 @@ class DbTab(QWidget):
             self._update_save_button()
 
 
-class _SincePlaceholderDelegate(QStyledItemDelegate):
+class _CompactLineEditDelegate(QStyledItemDelegate):
     def createEditor(self, parent, option, index):
         editor = QLineEdit(parent)
+        editor.setStyleSheet(
+            "QLineEdit {"
+            " padding: 1px 6px 2px 6px;"
+            " border: 1px solid #3a4a64;"
+            " border-radius: 6px;"
+            " margin: 0px;"
+            " min-height: 0px;"
+            "}"
+        )
+        return editor
+
+    def setEditorData(self, editor, index):
+        super().setEditorData(editor, index)
+        if isinstance(editor, QLineEdit):
+            text = editor.text()
+            QTimer.singleShot(0, lambda: self._move_cursor_to_end(editor, text))
+
+    def _move_cursor_to_end(self, editor: QLineEdit, text: str) -> None:
+        if editor is None:
+            return
+        editor.deselect()
+        editor.setCursorPosition(len(text))
+
+
+class _SincePlaceholderDelegate(_CompactLineEditDelegate):
+    def createEditor(self, parent, option, index):
+        editor = super().createEditor(parent, option, index)
         editor.setPlaceholderText("yyyy-mm-dd")
         font = editor.font()
         font.setPointSize(max(8, font.pointSize() - 1))

@@ -1,0 +1,19 @@
+{
+  "name": "TLC",
+  "vial1_x": 120.0,
+  "vial1_y": 175.0,
+  "vial_dy": 0.0,
+  "vial_dx": 1.9,
+  "vial_rows": 1,
+  "vial_columns": 100,
+  "z_min_vials": 29.0,
+  "solvent1_x": 0.0,
+  "solvent1_y": 0.0,
+  "solvent_rows": 1,
+  "solvent_columns": 1,
+  "solvent_dy": null,
+  "solvent_dx": null,
+  "z_min_solvents": 29.0,
+  "waste_x": 235.0,
+  "waste_y": 110.0
+}

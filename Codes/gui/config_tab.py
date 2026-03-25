@@ -528,11 +528,14 @@ class ConfigTab(QWidget):
     # ---------------- Data loading ----------------
 
     def _load_syringe_list(self) -> None:
+        current_syringe_id = self.cmb_setup_syringe.currentData() if hasattr(self, "cmb_setup_syringe") else None
+        self.cmb_setup_syringe.blockSignals(True)
         self.cmb_setup_syringe.clear()
         self.cmb_setup_syringe.addItem("— select —", None)
         try:
             syringes = Syringe.get_all()
         except Exception as e:
+            self.cmb_setup_syringe.blockSignals(False)
             QMessageBox.warning(self, "DB error", f"Cannot load syringes: {e!s}")
             return
 
@@ -541,6 +544,12 @@ class ConfigTab(QWidget):
                 continue
             label = f"{s.id} - {s.name}"
             self.cmb_setup_syringe.addItem(label, int(s.id))
+        idx = self.cmb_setup_syringe.findData(current_syringe_id)
+        self.cmb_setup_syringe.setCurrentIndex(idx if idx >= 0 else 0)
+        self.cmb_setup_syringe.blockSignals(False)
+
+    def refresh_syringe_list(self) -> None:
+        self._load_syringe_list()
 
     def _reload_all_lists(self) -> None:
         self._reload_machine_list()

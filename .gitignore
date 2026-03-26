@@ -6,11 +6,11 @@ __pycache__/
 AGENTS.md
 # Generated outputs
 G-codes/*
-csv/*
+Excel/*
 
 # Keep empty dirs in git
 !G-codes/.gitkeep
-!csv/.gitkeep
+!Excel/.gitkeep
 
 # IDE (PyCharm)
 .idea/

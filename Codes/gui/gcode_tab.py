@@ -31,6 +31,7 @@ from ..Rack import Rack
 from ..Setup import Setup
 from ..Solvent import Solvent
 from ..Syringe import Syringe
+from ..SyringeSolventLink import SyringeSolventLink
 
 
 class GCodeTab(QWidget):
@@ -463,8 +464,8 @@ class GCodeTab(QWidget):
     # ---------------- File pickers ----------------
 
     def _pick_template_path(self, *_) -> None:
-        csv_dir = self._base_dir.parent / "csv"
-        start_dir = str(csv_dir if csv_dir.is_dir() else self._base_dir)
+        excel_dir = self._base_dir.parent / "Excel"
+        start_dir = str(excel_dir if excel_dir.is_dir() else self._base_dir)
         path, _ = QFileDialog.getSaveFileName(self, "Save Excel template", start_dir, "Excel files (*.xlsx)")
         if not path:
             return
@@ -473,8 +474,8 @@ class GCodeTab(QWidget):
         self.edt_template_path.setText(str(Path(path)))
 
     def _pick_program_path(self, *_) -> None:
-        csv_dir = self._base_dir.parent / "csv"
-        start_dir = str(csv_dir if csv_dir.is_dir() else self._base_dir)
+        excel_dir = self._base_dir.parent / "Excel"
+        start_dir = str(excel_dir if excel_dir.is_dir() else self._base_dir)
         path, _ = QFileDialog.getOpenFileName(self, "Open Excel program", start_dir, "Excel files (*.xlsx)")
         if not path:
             return
@@ -533,6 +534,25 @@ class GCodeTab(QWidget):
         s_id = self._selected_syringe_id()
         return PipetG(outfile=outfile, setup=setup, syringe_id=s_id)
 
+    def _ensure_selected_syringe_has_links(self) -> None:
+        s_id = self._selected_syringe_id()
+        selected_label = self.cmb_syringe.currentText().strip()
+
+        try:
+            has_links = any(int(link.syringe_id) == s_id for link in SyringeSolventLink.get_all())
+        except Exception as e:
+            raise ValueError(f"Could not load syringe-solvent links: {e!s}") from e
+
+        if has_links:
+            return
+
+        raise ValueError(
+            "The selected syringe has no syringe-solvent links yet.\n\n"
+            f"Selected syringe: {selected_label}\n\n"
+            "Please create at least one syringe-solvent link in the "
+            "'Syringes and Solvents' tab before creating an Excel template."
+        )
+
     # ---------------- Actions ----------------
 
     def _on_create_template(self, *_) -> None:
@@ -546,6 +566,8 @@ class GCodeTab(QWidget):
 
             out_path = Path(out)
             out_path.parent.mkdir(parents=True, exist_ok=True)
+
+            self._ensure_selected_syringe_has_links()
 
             dummy_gcode = (out_path.parent / "_dummy.gcode").resolve()
             pg = self._build_pipet(dummy_gcode)

@@ -655,9 +655,11 @@ class DbTab(QWidget):
                 obj = existing.get(key)
                 if obj is None:
                     try:
-                        obj = SyringeSolventLink(
-                            syringe_id=row["syringe_id"],
-                            solvent_id=row["solvent_id"],
+                        obj = SyringeSolventLink.model_validate(
+                            {
+                                "syringe_id": row["syringe_id"],
+                                "solvent_id": row["solvent_id"],
+                            }
                         )
                     except ValueError as e:
                         session.rollback()
